@@ -1,0 +1,18 @@
+name: example-basic
+description: Minimal single-stage run over four rows.
+params: params.psv
+width: 2
+scheduler: pbs
+schema:
+  name: basic
+  format: {delimiter: pipe, header: true, id_field: run_id}
+  fields:
+    - {name: run_id, type: regex, pattern: "[a-z0-9_-]+"}
+    - {name: count, type: int, min: 1, max: 100}
+    - {name: label, type: str}
+pipeline:
+  name: basic
+  stages:
+    - {name: work, command: 'printf "%s:%s\\n" "$JC_run_id" "$JC_count" > "{run.home}/work/{row.name}.txt"'}
+paths:
+  work_dir: "{run.home}/work/{row.name}"

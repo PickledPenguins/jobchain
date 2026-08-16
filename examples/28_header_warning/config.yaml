@@ -1,0 +1,12 @@
+name: example-header-warning
+params: params.psv
+scheduler: pbs
+schema:
+  name: header-warning
+  format: {delimiter: pipe, header: true, id_field: id}
+  fields:
+    - {name: id, type: regex, pattern: "[a-z]+"}
+    - {name: value, type: int, min: 0, max: 10}
+pipeline:
+  stages:
+    - {name: work, command: 'printf "%s:%s\n" "$JC_id" "$JC_value"'}

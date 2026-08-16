@@ -1,0 +1,9 @@
+name: row-count
+params: params.psv
+schema:
+  name: s
+  format: {delimiter: pipe, header: true}
+  fields:
+    - {name: id, type: str}
+  file_checks:
+    - {type: row_count, min: 3, max: 3}

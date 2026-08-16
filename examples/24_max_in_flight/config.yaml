@@ -1,0 +1,17 @@
+name: example-max-in-flight
+description: Wide row processing constrained by max_in_flight.
+params: params.psv
+scheduler: pbs
+width: 4
+workers: 4
+max_in_flight: 2
+schema:
+  name: in-flight
+  format: {delimiter: pipe, header: true, id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "[a-z]+"}
+    - {name: value, type: int, min: 1, max: 100}
+pipeline:
+  name: max-in-flight
+  stages:
+    - {name: work, command: 'printf "%s:%s\n" "$JC_case" "$JC_value"'}

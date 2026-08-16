@@ -1,0 +1,7 @@
+name: duplicate-fields
+params: params.psv
+schema:
+  name: s
+  fields:
+    - {name: a, type: int}
+    - {name: a, type: int}

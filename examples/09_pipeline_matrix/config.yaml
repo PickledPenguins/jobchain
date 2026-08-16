@@ -1,0 +1,27 @@
+name: example-pipeline-matrix
+description: Mixed command/class pipeline with explicit dependencies and chaining.
+params: params.psv
+width: 2
+workers: 2
+scheduler: pbs
+schema:
+  name: topology-input
+  format: {delimiter: pipe, header: true, id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "[a-z]+"}
+    - {name: value, type: int, min: 1, max: 1000}
+pipeline:
+  name: topology
+  stage_module: stages.py
+  defaults:
+    queue: normal
+    env:
+      EXAMPLE_PIPELINE: topology
+  stages:
+    - {name: prepare, command: 'printf "prepare:%s\\n" "$JC_case" > "{run.home}/prepare-{row.name}.txt"', ncpus: 1}
+    - {name: transform, uses: Transform, depends: afterok, ncpus: 2}
+    - {name: inspect, command: 'test -f "$JC_OUT_transform"', depends: afterok, ncpus: 1}
+    - {name: recover, uses: Recover, depends: afterany, chains_next: true, ncpus: 1}
+    - {name: archive, uses: Archive, depends: afterany, ncpus: 1}
+paths:
+  work_dir: "{run.home}/work/{row.name}/generation-{row.generation}"

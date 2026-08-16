@@ -1,0 +1,20 @@
+name: example-handoff-generations
+description: Multi-stage handoff values and generation-specific work directories.
+params: params.psv
+scheduler: pbs
+width: 1
+pipeline:
+  name: handoff-generations
+  stage_module: stages.py
+  stages:
+    - {name: produce, uses: Produce}
+    - {name: consume, uses: Consume, depends: afterok}
+    - {name: verify, command: 'test -n "$JC_OUT_payload"', depends: afterany}
+paths:
+  work_dir: "{run.home}/work/{row.name}/generation-{row.generation}"
+schema:
+  name: handoff
+  format: {delimiter: pipe, header: true, id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "[a-z]+"}
+    - {name: value, type: int, min: 1, max: 100}

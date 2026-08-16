@@ -1,0 +1,26 @@
+# Same pipeline as ../../simple/two-stage-basic, but this project is meant
+# to be run with JOBCHAIN_NODE pointed at bin/jobchain-node.sh instead of
+# the compiled bin/jobchain-node. width is deliberately set below the row
+# count: only the first chain is submitted directly by the Python front
+# end, so the second and third rows' entire chains are submitted by the
+# shell helper's own self-chaining logic -- the code path a real defect
+# lived in (see BUGFIXES.md item 4), and the reason this example needs
+# more rows than width rather than one row per chain.
+name: shell-helper-node
+description: Two JobStage classes, run through the portable shell node helper.
+
+params: runs.psv
+width: 1
+
+schema:
+  name: task-input
+  format: {delimiter: pipe, header: true, id_field: task_id}
+  fields:
+    - {name: task_id,   type: regex, pattern: "[A-Za-z0-9_-]+"}
+    - {name: seed_file, type: path_exists, must_be_file: true}
+
+pipeline:
+  stage_module: stages.py
+  stages:
+    - {name: build,  walltime: "00:10:00", ncpus: 1}
+    - {name: finish, depends: afterany}

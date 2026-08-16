@@ -1,0 +1,38 @@
+#!/bin/sh
+#
+# Launcher for the jobchain submit-host tool.
+#
+# Resolves the installation directory from this script's own location so the
+# package is importable without any environment setup, then hands control to
+# the Python front end. Symlinks are followed so the launcher can live on
+# PATH while the installation stays where it was unpacked.
+
+set -u
+
+target="$0"
+while [ -L "$target" ]; do
+    link=$(readlink "$target")
+    case "$link" in
+        /*) target="$link" ;;
+        *)  target="$(dirname "$target")/$link" ;;
+    esac
+done
+
+JOBCHAIN_ROOT=$(cd "$(dirname "$target")/.." && pwd)
+export PYTHONPATH="${JOBCHAIN_ROOT}${PYTHONPATH:+:$PYTHONPATH}"
+
+# The compiled helper ships alongside this launcher; make it discoverable
+# without requiring it to be on PATH.
+if [ -z "${JOBCHAIN_NODE:-}" ] && [ -x "${JOBCHAIN_ROOT}/bin/jobchain-node" ]; then
+    JOBCHAIN_NODE="${JOBCHAIN_ROOT}/bin/jobchain-node"
+    export JOBCHAIN_NODE
+fi
+
+PYTHON="${JOBCHAIN_PYTHON:-python3}"
+if ! command -v "$PYTHON" >/dev/null 2>&1; then
+    echo "jobchain: no python3 interpreter found on PATH" >&2
+    echo "jobchain: set JOBCHAIN_PYTHON to the interpreter to use" >&2
+    exit 2
+fi
+
+exec "$PYTHON" -m jobchain "$@"

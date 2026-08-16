@@ -1,0 +1,18 @@
+name: example-formats
+description: Quoted comma-delimited input with spaces and delimiters inside fields.
+params: params.csv
+width: 1
+scheduler: pbs
+schema:
+  name: formats
+  format: {delimiter: comma, header: true, quoting: true, id_field: run_id}
+  fields:
+    - {name: run_id, type: regex, pattern: "[a-z0-9_-]+"}
+    - {name: description, type: str}
+    - {name: count, type: int, min: 0, max: 100}
+pipeline:
+  name: formats
+  stages:
+    - {name: show, command: 'printf "%s|%s|%s\\n" "$JC_run_id" "$JC_description" "$JC_count" > "{run.home}/work/{row.name}.txt"'}
+paths:
+  work_dir: "{run.home}/work/{row.name}"

@@ -1,0 +1,32 @@
+# Simplest possible run: no pipeline block, so jobchain submits one job
+# per row. Validation is declared entirely in YAML (see the sibling
+# single-job-class example for the same result via a Python class).
+name: single-job-yaml
+description: One job per row, YAML field validation, no pipeline stages.
+
+params: runs.psv
+width: 2
+
+schema:
+  name: copy-input
+  format: {delimiter: pipe, header: true, id_field: run_id}
+  fields:
+    - {name: run_id,     type: regex, pattern: "[A-Za-z0-9_-]+"}
+    - {name: input_file, type: path_exists, must_be_file: true}
+    - {name: copies,     type: int, min: 1, max: 10}
+
+# A single stage with `command:` and no stage class or stage_module: the
+# shortest way to run one job per row. `{row.<column>}` and `{run.home}` are
+# expanded into the command text before the script is written, so the shell
+# never needs to reconstruct a path; the row's fields are also available as
+# JC_<column> shell variables, exactly as spelled in the schema (JC_run_id,
+# JC_input_file, JC_copies here), sourced from the row's own env file, for
+# anything easier read at run time than baked in at generation time.
+pipeline:
+  stages:
+    - name: copy
+      command: >-
+        mkdir -p "{run.home}/output/{row.run_id}";
+        for n in $(seq 1 "$JC_copies"); do
+          cp "{row.input_file}" "{run.home}/output/{row.run_id}/copy-$n.txt";
+        done

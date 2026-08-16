@@ -1,0 +1,15 @@
+name: example-quoted-csv
+description: CSV quoting with embedded delimiters and escaped quotes.
+params: params.csv
+scheduler: pbs
+schema:
+  name: quoted-csv
+  format: {delimiter: comma, header: true, quoting: true, id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "[a-z]+"}
+    - {name: message, type: str, min_length: 1}
+    - {name: count, type: int, min: 0, max: 10}
+pipeline:
+  name: quoted-csv
+  stages:
+    - {name: echo, command: 'printf "%s|%s|%s\n" "$JC_case" "$JC_message" "$JC_count"'}

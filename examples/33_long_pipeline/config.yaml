@@ -1,0 +1,17 @@
+name: example-long-pipeline
+params: params.psv
+scheduler: pbs
+schema:
+  name: long
+  format: {delimiter: pipe, header: true, id_field: id}
+  fields:
+    - {name: id, type: regex, pattern: "[a-z]+"}
+pipeline:
+  name: six-stage
+  stages:
+    - {name: s1, command: 'true'}
+    - {name: s2, command: 'true', depends: afterok}
+    - {name: s3, command: 'true', depends: afterok}
+    - {name: s4, command: 'true', depends: afterok}
+    - {name: s5, command: 'true', depends: afterok}
+    - {name: s6, command: 'true', depends: afterany}

@@ -1,0 +1,21 @@
+# Same shape as single-job-yaml, but validation is a Python class
+# (SchemaBase) instead of a YAML fields: list. Useful when a check needs
+# real code, like the cross-column rule in validators.py.
+name: single-job-class
+description: One job per row, class-based (SchemaBase) validation.
+
+params: runs.psv
+width: 2
+
+schema:
+  name: run-input
+  format: {delimiter: comma, header: true, id_field: run_id}
+  validator_class: validators.py
+
+pipeline:
+  stages:
+    - name: process
+      command: >-
+        mkdir -p "{run.home}/output/{row.run_id}";
+        echo "processing $JC_dataset mode=$JC_mode scale=$JC_scale_factor"
+        > "{run.home}/output/{row.run_id}/result.txt"

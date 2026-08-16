@@ -1,0 +1,37 @@
+version: 1
+examples:
+  - {name: basic, path: 01_basic, tags: [smoke, regression, documentation], runtime: short}
+  - {name: validation, path: 02_validation, tags: [smoke, integration, regression, documentation], runtime: short}
+  - {name: pipeline, path: 03_pipeline, tags: [smoke, e2e, integration, regression, documentation], runtime: short}
+  - {name: dynamic-resources, path: 04_dynamic_resources, tags: [smoke, e2e, integration, regression, documentation], runtime: short}
+  - {name: failure-recovery, path: 05_failure_recovery, tags: [smoke, e2e, integration, regression, failure, documentation], runtime: short}
+  - {name: formats, path: 06_formats, tags: [smoke, integration, regression, documentation], runtime: short}
+  - {name: complex, path: 07_complex, tags: [smoke, e2e, integration, regression, documentation], runtime: short}
+  - {name: validator-matrix, path: 08_validator_matrix, tags: [smoke, integration, regression, schema, documentation], runtime: short}
+  - {name: pipeline-matrix, path: 09_pipeline_matrix, tags: [smoke, e2e, integration, regression, pipeline, documentation], runtime: short}
+  - {name: load-100, path: 10_load_100, tags: [load, regression, stress], runtime: long}
+  - {name: load-1000, path: 11_load_1000, tags: [load, regression, stress], runtime: long}
+  - {name: negative-matrix, path: 12_negative_matrix, tags: [regression, negative, documentation], runtime: short}
+  - {name: operations, path: 13_operations, tags: [smoke, e2e, integration, regression, operations, documentation], runtime: short}
+  - {name: scheduler-reconciliation, path: 14_scheduler_reconciliation, tags: [smoke, integration, e2e, regression, scheduler, recovery, documentation], runtime: short}
+  - {name: concurrency, path: 15_concurrency, tags: [smoke, integration, e2e, regression, concurrency, documentation], runtime: short}
+  - {name: schema-edges, path: 16_schema_edges, tags: [smoke, integration, regression, schema, documentation], runtime: short}
+  - {name: input-formats, path: 17_input_formats, tags: [smoke, integration, regression, formats, documentation], runtime: short}
+  - {name: resource-precedence, path: 18_resource_precedence, tags: [smoke, e2e, integration, regression, resources, documentation], runtime: short}
+  - {name: stage-settings, path: 19_stage_settings, tags: [smoke, e2e, integration, regression, pipeline, documentation], runtime: short}
+  - {name: handoff-generations, path: 20_handoff_generations, tags: [smoke, e2e, integration, regression, handoff, operations, documentation], runtime: short}
+  - {name: scheduler-equivalence, path: 21_scheduler_equivalence, tags: [smoke, integration, regression, scheduler, documentation], runtime: short}
+  - {name: multirun-isolation, path: 22_multirun_isolation, tags: [smoke, integration, e2e, regression, multirun, documentation], runtime: short}
+  - {name: comments-empty, path: 23_comments_and_empty_rows, tags: [smoke, integration, regression, formats, documentation], runtime: short}
+  - {name: max-in-flight, path: 24_max_in_flight, tags: [smoke, integration, regression, concurrency, resources, documentation], runtime: short}
+  - {name: quoted-csv, path: 25_quoted_csv, tags: [smoke, integration, regression, formats, documentation], runtime: short}
+  - {name: tab-delimiter, path: 26_tab_delimiter, tags: [smoke, integration, regression, formats, documentation], runtime: short}
+  - {name: literal-delimiter, path: 27_literal_delimiter, tags: [smoke, integration, regression, formats, documentation], runtime: short}
+  - {name: header-warning, path: 28_header_warning, tags: [smoke, integration, regression, formats, documentation], runtime: short}
+  - {name: optional-defaults, path: 29_optional_defaults, tags: [smoke, integration, regression, schema, documentation], runtime: short}
+  - {name: output-paths, path: 30_output_paths, tags: [smoke, integration, regression, schema, documentation], runtime: short}
+  - {name: env-directives, path: 31_env_and_directives, tags: [smoke, integration, regression, resources, documentation], runtime: short}
+  - {name: single-stage, path: 32_single_stage, tags: [smoke, e2e, integration, regression, pipeline, documentation], runtime: short}
+  - {name: long-pipeline, path: 33_long_pipeline, tags: [smoke, e2e, integration, regression, pipeline, documentation], runtime: short}
+  - {name: afternotok, path: 34_afternotok, tags: [smoke, e2e, integration, regression, failure, pipeline, documentation], runtime: short}
+  - {name: semicolon, path: 35_multi_delimiter_values, tags: [smoke, integration, regression, formats, documentation], runtime: short}

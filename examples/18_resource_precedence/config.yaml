@@ -1,0 +1,20 @@
+name: example-resource-precedence
+description: Pipeline defaults, stage overrides, and row-dependent resources.
+params: params.psv
+scheduler: pbs
+width: 2
+schema:
+  name: resources
+  format: {delimiter: pipe, header: true, id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "[a-z]+"}
+    - {name: cpus, type: int, min: 1, max: 64}
+    - {name: mem_gb, type: int, min: 1, max: 64}
+pipeline:
+  name: resource-precedence
+  stage_module: stages.py
+  defaults: {queue: normal, ncpus: 1, mem: 1gb, walltime: "00:05:00"}
+  stages:
+    - {name: prepare, command: 'printf "prepare:%s\n" "$JC_case"', ncpus: 2, mem: 2gb}
+    - {name: compute, uses: Compute, depends: afterok}
+    - {name: finish, command: 'printf "finish:%s\n" "$JC_case"', ncpus: 1, depends: afterany}

@@ -1,0 +1,26 @@
+# Three real stages: Prep -> Solve -> Archive. Exercises emit_shell_expr
+# (a value only known at run time), a Choice setting overridden per row's
+# needs via the pipeline YAML, and pipeline-level defaults merged under a
+# per-stage override.
+name: three-stage-handoff
+description: "Prep computes at run time, Solve chooses precision, Archive collects."
+
+params: runs.psv
+width: 2
+
+schema:
+  name: sweep-input
+  format: {delimiter: pipe, header: true, id_field: run_id}
+  fields:
+    - {name: run_id,     type: regex, pattern: "[A-Za-z0-9_-]+"}
+    - {name: input_file, type: path_exists, must_be_file: true}
+    - {name: precision,  type: one_of, values: [single, double]}
+
+pipeline:
+  stage_module: stages.py
+  defaults:
+    queue: normal
+  stages:
+    - {name: prep, walltime: "00:05:00", ncpus: 1}
+    - {name: solve, depends: afterok, precision: double}
+    - {name: archive, depends: afterany, ncpus: 1}

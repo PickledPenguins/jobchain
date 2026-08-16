@@ -1,0 +1,3 @@
+run_id|input_file
+slurm-one|data/one.txt
+slurm-two|data/two.txt

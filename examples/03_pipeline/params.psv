@@ -1,0 +1,4 @@
+run_id|mesh|threads
+small_case|small|2
+medium_case|medium|8
+large_case|large|16

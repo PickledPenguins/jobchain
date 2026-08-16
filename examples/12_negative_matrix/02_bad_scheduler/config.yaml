@@ -1,0 +1,7 @@
+name: bad-scheduler
+params: params.psv
+scheduler: torque
+schema:
+  name: s
+  fields:
+    - {name: id, type: str}

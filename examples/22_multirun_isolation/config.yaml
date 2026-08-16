@@ -1,0 +1,14 @@
+name: example-multirun-{time}
+description: Independent reusable configuration for isolated runs.
+params: params.psv
+scheduler: pbs
+schema:
+  name: multirun
+  format: {delimiter: pipe, header: true, id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "[a-z]+"}
+    - {name: value, type: int, min: 1, max: 100}
+pipeline:
+  name: isolated
+  stages:
+    - {name: work, command: 'printf "%s:%s\n" "$JC_case" "$JC_value" > "{run.home}/result.txt"'}

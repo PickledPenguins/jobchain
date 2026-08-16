@@ -1,0 +1,16 @@
+name: example-comments-empty
+description: Comments, blank records, and row-count behavior.
+params: params.psv
+scheduler: pbs
+schema:
+  name: comments-empty
+  format: {delimiter: pipe, header: true, comment: "#", id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "[a-z]+"}
+    - {name: value, type: int, min: 1, max: 10}
+  file_checks:
+    - {type: row_count, min: 2, max: 3}
+pipeline:
+  name: comments-empty
+  stages:
+    - {name: work, command: 'printf "%s\n" "$JC_case"'}

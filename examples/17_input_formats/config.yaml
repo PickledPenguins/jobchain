@@ -1,0 +1,15 @@
+name: example-input-formats
+description: Headerless whitespace-delimited input with comments, blanks, and UTF-8 text.
+params: params.txt
+scheduler: pbs
+schema:
+  name: input-formats
+  format: {delimiter: whitespace, header: false, comment: "#"}
+  fields:
+    - {name: run_id, type: regex, pattern: "[A-Za-z0-9_-]+", unique: true}
+    - {name: message, type: str, min_length: 1}
+    - {name: count, type: int, min: 0, max: 100}
+pipeline:
+  name: input-formats
+  stages:
+    - {name: echo, command: 'printf "%s|%s|%s\n" "$JC_run_id" "$JC_message" "$JC_count"'}

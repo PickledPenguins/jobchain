@@ -1,0 +1,27 @@
+name: example-validation
+description: Exercise scalar, conditional, comparison, uniqueness, and path validation.
+params: params.psv
+width: 1
+scheduler: pbs
+schema:
+  name: validation
+  format: {delimiter: pipe, header: true, id_field: run_id}
+  fields:
+    - {name: run_id, type: regex, pattern: "[A-Za-z][A-Za-z0-9_-]+"}
+    - {name: mode, type: one_of, values: [cpu, gpu], case_sensitive: false}
+    - {name: threads, type: int, min: 1, max: 128}
+    - {name: gpu_count, type: int, min: 0, max: 8, optional: true, default: 0}
+    - {name: tolerance, type: float, min: 0.0, max: 1.0}
+    - {name: input_file, type: path_exists, must_be_file: true, readable: true}
+    - {name: output_file, type: output_path, must_not_exist: true, unique: true}
+  row_checks:
+    - {type: required_when, when_field: mode, equals: gpu, require_field: gpu_count}
+    - {type: compare, left: gpu_count, op: "<=", right: threads}
+  file_checks:
+    - {type: unique, fields: [output_file]}
+pipeline:
+  name: validation
+  stages:
+    - {name: validate, command: 'test -r "$JC_input_file"'}
+paths:
+  work_dir: "{run.home}/work/{row.name}"

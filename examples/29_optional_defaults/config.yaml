@@ -1,0 +1,14 @@
+name: example-optional-defaults
+params: params.psv
+scheduler: pbs
+schema:
+  name: defaults
+  format: {delimiter: pipe, header: true, id_field: id}
+  fields:
+    - {name: id, type: regex, pattern: "[a-z]+"}
+    - {name: label, type: str, optional: true, default: "default-label"}
+    - {name: enabled, type: bool, optional: true, default: false}
+    - {name: count, type: int, min: 0, optional: true, default: 7}
+pipeline:
+  stages:
+    - {name: work, command: 'printf "%s|%s|%s|%s\n" "$JC_id" "$JC_label" "$JC_enabled" "$JC_count"'}

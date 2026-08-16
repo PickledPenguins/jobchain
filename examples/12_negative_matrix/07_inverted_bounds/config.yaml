@@ -1,0 +1,6 @@
+name: inverted-bounds
+params: params.psv
+schema:
+  name: s
+  fields:
+    - {name: a, type: int, min: 10, max: 1}

@@ -1,0 +1,5 @@
+case|mode|threads|ratio|enabled|literal|label|selector|input_file|output_file|gpu_count
+cpu-basic|CPU|1|0|yes|READY|alpha|auto|data/input.dat|outputs/cpu-basic.out|
+gpu-basic|gpu|8|0.5|true|READY|gpu_01|1|data/input.dat|outputs/gpu-basic.out|1
+cpu-boundary|cpu|128|1.0|0|READY|boundary|128|data/input.dat|outputs/cpu-boundary.out|0
+gpu-boundary|GPU|8|0.001|on|READY|g-boundary|auto|data/input.dat|outputs/gpu-boundary.out|8

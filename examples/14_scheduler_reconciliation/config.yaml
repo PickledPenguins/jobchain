@@ -1,0 +1,19 @@
+name: operations
+params: params.psv
+width: 2
+scheduler: pbs
+max_attempts: 3
+
+schema:
+  name: operations
+  format: {delimiter: pipe, header: true, id_field: rid}
+  fields:
+    - {name: rid, type: regex, pattern: "[a-z0-9]+"}
+    - {name: count, type: int, min: 1, max: 100}
+    - {name: label, type: str}
+
+pipeline:
+  stages:
+    - {name: prep, command: "mkdir -p \"$JC_RUN/work\"; printf prepared > \"$JC_RUN/work/input.txt\""}
+    - {name: solve, command: "cat \"$JC_RUN/work/input.txt\" > \"$JC_RUN/work/output.txt\""}
+    - {name: archive, command: "mkdir -p \"$JC_RUN/work/archive\"; cp \"$JC_RUN/work/output.txt\" \"$JC_RUN/work/archive/result.txt\""}

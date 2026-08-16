@@ -1,0 +1,7 @@
+name: unknown-key
+params: params.psv
+widht: 2
+schema:
+  name: s
+  fields:
+    - {name: id, type: str}

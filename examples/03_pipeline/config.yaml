@@ -1,0 +1,22 @@
+name: example-pipeline
+description: Three-stage pipeline with scheduler dependencies and handoff.
+params: params.psv
+width: 2
+scheduler: pbs
+schema:
+  name: pipeline
+  format: {delimiter: pipe, header: true, id_field: run_id}
+  fields:
+    - {name: run_id, type: regex, pattern: "[a-z0-9_-]+"}
+    - {name: mesh, type: one_of, values: [small, medium, large]}
+    - {name: threads, type: int, min: 1, max: 64}
+pipeline:
+  name: three-stage
+  stage_module: stages.py
+  defaults: {queue: normal}
+  stages:
+    - {name: prep, ncpus: 1, walltime: "00:10:00"}
+    - {name: solve, depends: afterok}
+    - {name: archive, depends: afterany}
+paths:
+  work_dir: "{run.home}/work/{row.name}"

@@ -1,0 +1,62 @@
+name: example-validator-matrix
+description: Every declarative validator family exercised by one valid dataset.
+params: params.psv
+width: 1
+scheduler: pbs
+schema:
+  name: validator-matrix
+  format: {delimiter: pipe, header: true, id_field: case}
+  fields:
+    - name: case
+      type: regex
+      pattern: "[a-z][a-z0-9-]+"
+    - name: mode
+      type: one_of
+      values: [cpu, gpu]
+      case_sensitive: false
+    - name: threads
+      type: int
+      min: 1
+      max: 128
+    - name: ratio
+      type: float
+      min: 0.0
+      max: 1.0
+    - name: enabled
+      type: bool
+    - name: literal
+      type: exact
+      value: READY
+    - name: label
+      checks:
+        - {type: all_of, of: [{type: str, min_length: 3}, {type: regex, pattern: "[A-Za-z0-9_-]+"}]}
+    - name: selector
+      checks:
+        - {type: any_of, of: [{type: exact, value: auto}, {type: regex, pattern: "[0-9]+"}]}
+    - name: input_file
+      type: path_exists
+      must_be_file: true
+      readable: true
+    - name: output_file
+      type: output_path
+      must_not_exist: true
+      unique: true
+    - name: gpu_count
+      type: int
+      min: 0
+      max: 8
+      optional: true
+      default: 0
+  row_checks:
+    - {type: required_when, when_field: mode, equals: gpu, require_field: gpu_count}
+    - {type: compare, left: gpu_count, op: "<=", right: threads}
+  file_checks:
+    - {type: unique, fields: [output_file]}
+    - {type: row_count, min: 4, max: 4}
+pipeline:
+  name: validator-matrix
+  stages:
+    - name: validate
+      command: 'test -r "$JC_input_file" && test "$JC_literal" = READY'
+paths:
+  work_dir: "{run.home}/work/{row.name}"

@@ -1,0 +1,17 @@
+name: example-load-100
+params: params.psv
+width: 16
+workers: 4
+scheduler: pbs
+schema:
+  name: load100
+  format: {delimiter: pipe, header: true, id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "row-[0-9]+"}
+    - {name: value, type: int, min: 0, max: 1000000}
+pipeline:
+  name: load100
+  stages:
+    - {name: work, command: 'printf "%s\\n" "$JC_value" > "{run.home}/work/{row.name}.txt"'}
+paths:
+  work_dir: "{run.home}/work/{row.name}"

@@ -1,0 +1,16 @@
+name: example-stage-settings
+description: Same stage class instantiated with different per-stage settings.
+params: params.psv
+scheduler: pbs
+schema:
+  name: settings
+  format: {delimiter: pipe, header: true, id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "[a-z]+"}
+    - {name: value, type: int, min: 1, max: 100}
+pipeline:
+  name: stage-settings
+  stage_module: stages.py
+  stages:
+    - {name: coarse, uses: Format, prefix: coarse, multiplier: 2, ncpus: 1}
+    - {name: fine, uses: Format, prefix: fine, multiplier: 10, depends: afterany, ncpus: 2}

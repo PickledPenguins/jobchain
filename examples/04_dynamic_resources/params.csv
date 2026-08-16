@@ -1,0 +1,5 @@
+case,mode,size,threads
+cpu-small,cpu,small,2
+gpu-small,gpu,small,4
+cpu-medium,cpu,medium,16
+gpu-large,gpu,large,64

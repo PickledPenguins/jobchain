@@ -1,0 +1,8 @@
+name: duplicate-id
+params: params.psv
+schema:
+  name: s
+  format: {delimiter: pipe, header: true, id_field: id}
+  fields:
+    - {name: id, type: str}
+    - {name: value, type: int}

@@ -1,0 +1,12 @@
+name: example-tab-delimiter
+params: params.tsv
+scheduler: pbs
+schema:
+  name: tab
+  format: {delimiter: tab, header: true, id_field: id}
+  fields:
+    - {name: id, type: regex, pattern: "[a-z]+"}
+    - {name: count, type: int, min: 0, max: 10}
+pipeline:
+  stages:
+    - {name: work, command: 'printf "%s:%s\n" "$JC_id" "$JC_count"'}

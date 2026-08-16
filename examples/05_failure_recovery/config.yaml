@@ -1,0 +1,20 @@
+name: example-failure-recovery
+description: Deterministic stage failure followed by a rerun.
+params: params.psv
+width: 1
+scheduler: pbs
+schema:
+  name: failures
+  format: {delimiter: pipe, header: true, id_field: run_id}
+  fields:
+    - {name: run_id, type: regex, pattern: "[a-z0-9_-]+"}
+    - {name: fail_solve, type: one_of, values: ["yes", "no"]}
+pipeline:
+  name: recovery
+  stage_module: stages.py
+  stages:
+    - {name: prep}
+    - {name: solve, depends: afterok}
+    - {name: archive, depends: afterany}
+paths:
+  work_dir: "{run.home}/work/{row.name}/generation-{row.generation}"

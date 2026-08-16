@@ -1,0 +1,10 @@
+name: required-when
+params: params.psv
+schema:
+  name: s
+  format: {delimiter: pipe, header: true}
+  fields:
+    - {name: mode, type: str}
+    - {name: gpu, type: str}
+  row_checks:
+    - {type: required_when, when: mode, equals: gpu, require: gpu}

@@ -1,0 +1,22 @@
+name: example-dynamic-resources
+description: Resource requests derived from each parameter row.
+params: params.csv
+width: 2
+workers: 2
+scheduler: pbs
+schema:
+  name: resources
+  format: {delimiter: comma, header: true, id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "[a-z0-9_-]+"}
+    - {name: mode, type: one_of, values: [cpu, gpu]}
+    - {name: size, type: one_of, values: [small, medium, large]}
+    - {name: threads, type: int, min: 1, max: 128}
+pipeline:
+  name: resources
+  stage_module: stages.py
+  defaults: {queue: normal, mem: 2gb}
+  stages:
+    - {name: solve}
+paths:
+  work_dir: "{run.home}/work/{row.name}"

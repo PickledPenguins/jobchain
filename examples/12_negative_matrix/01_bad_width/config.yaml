@@ -1,0 +1,7 @@
+name: bad-width
+params: params.psv
+width: 0
+schema:
+  name: s
+  fields:
+    - {name: id, type: str}

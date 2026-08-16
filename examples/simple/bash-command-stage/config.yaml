@@ -1,0 +1,34 @@
+# A two-stage pipeline with no Python at all: no stage classes, no
+# stage_module. Both stages are `command:` shorthand. The first stage
+# publishes a handoff value with `$JC_NODE emit` directly -- the same
+# primitive ctx.emit() wraps for a class -- and the second reads it back
+# as JC_OUT_<key>, showing that handoff works independent of whether a
+# stage is a class or a bare command.
+name: bash-command-stage
+description: "Two-stage pipeline built entirely from command: strings."
+
+params: runs.psv
+width: 2
+
+schema:
+  name: convert-input
+  format: {delimiter: pipe, header: true, id_field: job_id}
+  fields:
+    - {name: job_id,      type: regex, pattern: "[A-Za-z0-9_-]+"}
+    - {name: source_file, type: path_exists, must_be_file: true}
+
+pipeline:
+  stages:
+    - name: convert
+      walltime: "00:05:00"
+      command: >-
+        outdir="{run.home}/output/{row.job_id}";
+        mkdir -p "$outdir";
+        tr 'a-z' 'A-Z' < "$JC_source_file" > "$outdir/converted.txt";
+        "$JC_NODE" emit --run "$JC_RUN" converted_path="$outdir/converted.txt"
+
+    - name: verify
+      depends: afterany
+      command: >-
+        [ -s "$JC_OUT_converted_path" ] && echo "verified: $JC_OUT_converted_path"
+        > "{run.home}/output/{row.job_id}/verified.txt"

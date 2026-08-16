@@ -1,0 +1,8 @@
+# Example parameter file. The last two rows are deliberately invalid.
+run_id|input_file|output_dir|mode|threads|mesh_size|tolerance
+r001|data/alpha.h5|out/alpha|cpu|16|medium|1e-6
+r002|data/beta.h5|out/beta|gpu|32|large|1e-8
+r003|data/gamma.h5|out/gamma|cpu|8|small|1e-6
+r004|data/delta.h5|out/delta|cpu|4|small|1e-5
+bad1|data/alpha.h5|out/bad1|cpu|1_0|small|1e-6
+bad2|data/missing.h5|out/bad2|cpu|4|small|1e-6

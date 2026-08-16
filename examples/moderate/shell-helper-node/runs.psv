@@ -1,0 +1,4 @@
+task_id|seed_file
+task-a|data/one.txt
+task-b|data/two.txt
+task-c|data/three.txt

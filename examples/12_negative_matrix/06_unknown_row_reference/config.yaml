@@ -1,0 +1,8 @@
+name: unknown-row-reference
+params: params.psv
+schema:
+  name: s
+  fields:
+    - {name: a, type: int}
+  row_checks:
+    - {type: compare, left: a, op: '>', right: missing}

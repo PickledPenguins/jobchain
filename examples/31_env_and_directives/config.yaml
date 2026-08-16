@@ -1,0 +1,16 @@
+name: example-env-directives
+params: params.psv
+scheduler: pbs
+pipeline:
+  name: env-directives
+  defaults:
+    queue: normal
+    env: {EXAMPLE_MODE: test, EXAMPLE_FIXED: yes}
+    extra_directives: ["# custom-test-directive"]
+  stages:
+    - {name: work, command: 'printf "%s|%s|%s\n" "$EXAMPLE_MODE" "$EXAMPLE_FIXED" "$JC_id"'}
+schema:
+  name: env
+  format: {delimiter: pipe, header: true, id_field: id}
+  fields:
+    - {name: id, type: regex, pattern: "[a-z]+"}

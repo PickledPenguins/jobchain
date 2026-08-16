@@ -1,0 +1,8 @@
+name: unknown-check
+params: params.psv
+schema:
+  name: s
+  fields:
+    - name: id
+      checks:
+        - {type: definitely_not_a_validator}

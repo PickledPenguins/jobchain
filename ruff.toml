@@ -1,0 +1,24 @@
+# Lint configuration.
+#
+# The pyupgrade rules (UP) are deliberately not enabled. They would rewrite
+# typing.List to list and Optional[X] to X | None, which is correct on modern
+# interpreters but needlessly narrows the range of Python versions this tool
+# runs on. Cluster login nodes are frequently several releases behind, and the
+# submit-host tool is not worth making unavailable there for a style change.
+
+target-version = "py38"
+line-length = 100
+
+[lint]
+select = ["E", "F", "W", "I", "B", "C4", "ISC", "RUF", "FURB", "DTZ", "SIM"]
+ignore = [
+    "E501",    # line length is enforced by line-length, not per-line noise
+    "B008",    # calls in argument defaults are used intentionally in argparse
+    "SIM105",  # contextlib.suppress is less readable than try/except: pass here
+    "RUF022",  # __all__ is grouped by concept with headings, which reads
+               # better than alphabetical for a re-export list
+]
+
+[lint.per-file-ignores]
+# Tests deliberately reach into private helpers to test them directly.
+"tests/*" = ["SLF001"]

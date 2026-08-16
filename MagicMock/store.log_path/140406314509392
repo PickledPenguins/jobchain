@@ -1,0 +1,46 @@
+2026-08-15 23:36:05,929 DEBUG   normalized /tmp/jobchain-test-rrqs414a/p.csv: 1 rows, 0 changed, 1 blank, 2 comment, expecting 3 fields
+2026-08-15 23:36:05,939 DEBUG   stripped a UTF-8 byte-order mark from /tmp/jobchain-test-6cwl8g_i/p.csv
+2026-08-15 23:36:05,940 DEBUG   normalized /tmp/jobchain-test-6cwl8g_i/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:05,950 DEBUG   normalized /tmp/jobchain-test-4u964het/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:05,951 DEBUG   normalized /tmp/jobchain-test-4u964het/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:05,952 DEBUG   normalized /tmp/jobchain-test-4u964het/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:05,962 DEBUG   normalized /tmp/jobchain-test-ic11z4m0/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:05,972 DEBUG   normalized /tmp/jobchain-test-6mhjfzd2/p.csv: 2 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:05,983 DEBUG   normalized /tmp/jobchain-test-wqz8mowi/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,025 DEBUG   normalized /tmp/jobchain-test-wqli3hr_/p.csv: 1 rows, 0 changed, 1 blank, 1 comment, expecting 3 fields
+2026-08-15 23:36:06,035 DEBUG   normalized /tmp/jobchain-test-cu2cpe5s/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,046 DEBUG   normalized /tmp/jobchain-test-6xhx0nr6/p.csv: 1 rows, 1 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,057 DEBUG   normalized /tmp/jobchain-test-1lc1b16b/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,077 DEBUG   normalized /tmp/jobchain-test-2fqtf27z/p.csv: 1 rows, 1 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,088 DEBUG   normalized /tmp/jobchain-test-vs3m_xfd/p.txt: 1 rows, 1 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,098 DEBUG   normalized /tmp/jobchain-test-sk4_lq6k/p.csv: 1 rows, 1 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,112 DEBUG   normalized /tmp/jobchain-test-ryznc5p2/p.csv: 2 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,112 DEBUG   scan complete: 2 row(s), 2 valid, 0 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,126 DEBUG   normalized /tmp/jobchain-test-r9kqrug4/p.csv: 2 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,126 DEBUG   scan complete: 2 row(s), 1 valid, 1 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,139 DEBUG   normalized /tmp/jobchain-test-euehjqxs/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,140 DEBUG   scan complete: 1 row(s), 0 valid, 1 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,153 DEBUG   normalized /tmp/jobchain-test-6m5i9f4o/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,153 DEBUG   scan complete: 1 row(s), 0 valid, 1 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,167 DEBUG   normalized /tmp/jobchain-test-dilqcjml/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,167 DEBUG   scan complete: 1 row(s), 0 valid, 1 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,180 DEBUG   normalized /tmp/jobchain-test-oqhl22mf/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,181 DEBUG   scan complete: 1 row(s), 0 valid, 1 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,193 DEBUG   normalized /tmp/jobchain-test-fzf_vrys/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,193 DEBUG   scan complete: 1 row(s), 1 valid, 0 invalid, 1 file-level failure(s)
+2026-08-15 23:36:06,208 DEBUG   normalized /tmp/jobchain-test-hb47y_e6/p.csv: 40 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,213 DEBUG   scan complete: 40 row(s), 0 valid, 40 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,227 DEBUG   normalized /tmp/jobchain-test-6a8pochw/p.csv: 2 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,228 DEBUG   scan complete: 2 row(s), 1 valid, 1 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,241 DEBUG   normalized /tmp/jobchain-test-dzvf8bju/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,241 DEBUG   scan complete: 1 row(s), 0 valid, 1 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,255 DEBUG   normalized /tmp/jobchain-test-byj84mj9/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,255 DEBUG   scan complete: 1 row(s), 1 valid, 0 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,269 DEBUG   normalized /tmp/jobchain-test-_zbt_8_j/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,269 DEBUG   scan complete: 1 row(s), 0 valid, 1 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,287 DEBUG   normalized /tmp/jobchain-test-s1jdzheq/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,287 DEBUG   scan complete: 1 row(s), 0 valid, 1 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,304 DEBUG   normalized /tmp/jobchain-test-04k7llz9/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,304 DEBUG   scan complete: 1 row(s), 0 valid, 1 invalid, 0 file-level failure(s)
+2026-08-15 23:36:06,318 DEBUG   normalized /tmp/jobchain-test-wte6g6sa/p.csv: 1 rows, 0 changed, 0 blank, 0 comment, expecting 3 fields
+2026-08-15 23:36:06,318 DEBUG   scan complete: 1 row(s), 0 valid, 1 invalid, 0 file-level failure(s)

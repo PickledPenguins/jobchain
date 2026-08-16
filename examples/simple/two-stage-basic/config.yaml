@@ -1,0 +1,22 @@
+# Minimal two-stage pipeline using real JobStage classes (not command:
+# strings). Uses the compiled C node helper (the default). See
+# ../shell-helper-node for the identical pipeline run with the portable
+# shell helper instead.
+name: two-stage-basic
+description: Two JobStage classes, compiled node helper, default depends.
+
+params: runs.psv
+width: 2
+
+schema:
+  name: task-input
+  format: {delimiter: pipe, header: true, id_field: task_id}
+  fields:
+    - {name: task_id,   type: regex, pattern: "[A-Za-z0-9_-]+"}
+    - {name: seed_file, type: path_exists, must_be_file: true}
+
+pipeline:
+  stage_module: stages.py
+  stages:
+    - {name: build,  walltime: "00:10:00", ncpus: 1}
+    - {name: finish, depends: afterany}

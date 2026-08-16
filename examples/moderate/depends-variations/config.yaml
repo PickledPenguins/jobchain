@@ -1,0 +1,26 @@
+# Every depends value in one pipeline: afterok (default), afternotok
+# (a diagnostic stage), and afterany (the chaining stage, which must be
+# afterany or afterany-derived per the chaining rule).
+name: depends-variations
+description: "All three depends values: afterok, afternotok, afterany."
+
+params: runs.psv
+width: 1
+
+schema:
+  name: depends-input
+  format: {delimiter: pipe, header: true, id_field: run_id}
+  fields:
+    - {name: run_id,      type: regex, pattern: "[A-Za-z0-9_-]+"}
+    - {name: input_file,  type: path_exists, must_be_file: true}
+    - {name: should_fail, type: one_of, values: ["yes", "no"]}
+    # quoted: unquoted yes/no parse as YAML booleans, not the strings
+    # one_of compares against
+
+pipeline:
+  stage_module: stages.py
+  stages:
+    - {name: prep}
+    - {name: solve, depends: afterok}
+    - {name: diagnose, depends: afternotok}
+    - {name: archive, depends: afterany}

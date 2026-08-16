@@ -1,0 +1,7 @@
+# comment before data
+case|value
+
+# ignored row
+alpha|1
+
+beta|2

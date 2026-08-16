@@ -1,0 +1,15 @@
+name: example-afternotok
+params: params.psv
+scheduler: pbs
+schema:
+  name: afternotok
+  format: {delimiter: pipe, header: true, id_field: id}
+  fields:
+    - {name: id, type: regex, pattern: "[a-z]+"}
+pipeline:
+  name: failure-branch
+  stage_module: stages.py
+  stages:
+    - {name: fail, uses: Fail}
+    - {name: recover, uses: Recover, depends: afternotok}
+    - {name: finalize, command: 'true', depends: afterany}

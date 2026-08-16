@@ -1,0 +1,28 @@
+name: example-schema-edges
+description: Optional fields, composite checks, path validation, and row/file constraints.
+params: params.psv
+scheduler: pbs
+strict: true
+schema:
+  name: schema-edges
+  format: {delimiter: pipe, header: true, id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "[A-Za-z][A-Za-z0-9_-]+"}
+    - {name: mode, type: one_of, values: [cpu, gpu, debug], case_sensitive: false}
+    - {name: threads, type: int, min: 1, max: 64}
+    - {name: tolerance, type: float, min: 0.0, max: 1.0}
+    - {name: enabled, type: bool}
+    - {name: label, type: str, min_length: 1, max_length: 12}
+    - {name: input_file, type: path_exists, must_be_file: true, readable: true}
+    - {name: output_file, type: output_path, unique: true, must_not_exist: true}
+    - {name: gpu_count, type: int, min: 0, max: 4, optional: true, default: 0}
+  row_checks:
+    - {type: required_when, when_field: mode, equals: gpu, require_field: gpu_count}
+    - {type: compare, left: gpu_count, op: "<=", right: threads}
+  file_checks:
+    - {type: unique, fields: [label]}
+    - {type: row_count, min: 3, max: 5}
+pipeline:
+  name: schema-edges
+  stages:
+    - {name: inspect, command: 'printf "%s %s\n" "$JC_case" "$JC_label" > "{run.home}/inspect-{row.name}.txt"'}

@@ -1,0 +1,14 @@
+name: example-implicit-pipeline
+params: params.psv
+scheduler: pbs
+schema:
+  name: implicit
+  format: {delimiter: pipe, header: true, id_field: id}
+  fields:
+    - {name: id, type: regex, pattern: "[a-z]+"}
+    - {name: value, type: int, min: 1, max: 10}
+
+pipeline:
+  name: single-stage
+  stages:
+    - {name: job, command: 'printf "%s:%s\n" "$JC_id" "$JC_value"'}

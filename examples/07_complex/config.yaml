@@ -1,0 +1,33 @@
+name: example-complex
+description: Combined parameter validation, resources, pipeline dependencies, handoff, and archival.
+params: params.psv
+width: 2
+workers: 2
+scheduler: pbs
+strict: true
+schema:
+  name: complex
+  format: {delimiter: pipe, header: true, id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "[A-Za-z][A-Za-z0-9_-]+"}
+    - {name: mode, type: one_of, values: [cpu, gpu], case_sensitive: false}
+    - {name: threads, type: int, min: 1, max: 64}
+    - {name: gpu_count, type: int, min: 0, max: 4, optional: true, default: 0}
+    - {name: tolerance, type: float, min: 0.0, max: 1.0}
+    - {name: input_file, type: path_exists, must_be_file: true, readable: true}
+    - {name: output_dir, type: output_path, unique: true}
+  row_checks:
+    - {type: required_when, when_field: mode, equals: gpu, require_field: gpu_count}
+    - {type: compare, left: gpu_count, op: "<=", right: threads}
+  file_checks:
+    - {type: unique, fields: [output_dir]}
+pipeline:
+  name: complex
+  stage_module: stages.py
+  defaults: {queue: normal, mem: 2gb}
+  stages:
+    - {name: prep, ncpus: 1, walltime: "00:10:00"}
+    - {name: solve, depends: afterok}
+    - {name: archive, depends: afterany, ncpus: 1}
+paths:
+  work_dir: "{run.home}/work/{row.name}/generation-{row.generation}"

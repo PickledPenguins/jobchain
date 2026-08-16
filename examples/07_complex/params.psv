@@ -1,0 +1,4 @@
+case|mode|threads|gpu_count|tolerance|input_file|output_dir
+cpu-small|CPU|2||0.25|data/a.dat|results/cpu-small
+gpu-small|gpu|4|1|0.05|data/b.dat|results/gpu-small
+cpu-large|cpu|16|0|0.001|data/a.dat|results/cpu-large

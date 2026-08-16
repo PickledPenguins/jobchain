@@ -1,0 +1,4 @@
+case|mode|threads|tolerance|enabled|label|input_file|output_file|gpu_count
+cpu_a|CPU|4|0.1|true|alpha|input_a.txt|out_a.txt|
+gpu_b|gpu|8|0.01|yes|bravo|input_b.txt|out_b.txt|1
+debug_c|debug|2|1.0|off|charlie|input_c.txt|out_c.txt|

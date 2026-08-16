@@ -1,0 +1,13 @@
+# Six data rows: three valid, three each violating one check.
+# gpu-ok:      mode=gpu, ngpus set -> required_when satisfied
+# gpu-missing: mode=gpu, ngpus empty -> required_when VIOLATED
+# cpu-ok:      mode=cpu, ngpus not required, threads within bound
+# bad-compare: ngpus > threads -> compare VIOLATED (ngpus <= threads)
+# dup-output:  output_dir repeats cpu-ok's -> file-level unique VIOLATED
+# extra-row exists only to make row_count's minimum meaningful
+run_id|input_file|output_dir|mode|threads|ngpus
+gpu-ok|data/a.dat|out/gpu-ok|gpu|8|2
+gpu-missing|data/b.dat|out/gpu-missing|gpu|8|
+cpu-ok|data/c.dat|out/cpu-ok|cpu|4|
+bad-compare|data/a.dat|out/bad-compare|gpu|2|4
+dup-output|data/b.dat|out/cpu-ok|cpu|4|

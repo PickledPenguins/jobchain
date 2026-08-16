@@ -1,0 +1,12 @@
+name: example-output-paths
+params: params.psv
+scheduler: pbs
+schema:
+  name: outputs
+  format: {delimiter: pipe, header: true, id_field: id}
+  fields:
+    - {name: id, type: regex, pattern: "[a-z]+"}
+    - {name: output, type: output_path, unique: true, must_not_exist: true}
+pipeline:
+  stages:
+    - {name: write, command: 'printf "%s\n" "$JC_id" > "$JC_output"'}

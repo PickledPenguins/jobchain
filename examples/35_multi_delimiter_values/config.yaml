@@ -1,0 +1,12 @@
+name: example-semicolon
+params: params.txt
+scheduler: pbs
+schema:
+  name: semicolon
+  format: {delimiter: semicolon, header: true, id_field: id}
+  fields:
+    - {name: id, type: regex, pattern: "[a-z]+"}
+    - {name: value, type: str, min_length: 1}
+pipeline:
+  stages:
+    - {name: work, command: 'printf "%s=%s\n" "$JC_id" "$JC_value"'}

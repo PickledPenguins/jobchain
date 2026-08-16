@@ -1,0 +1,23 @@
+# Same two-stage shape as ../../simple/two-stage-basic, but scheduler:
+# slurm switches every generated script to #SBATCH directives and
+# submission to sbatch / --dependency=<type>:<jobid> instead of qsub / -W
+# depend=<type>:<jobid>.
+name: slurm-scheduler
+description: Two JobStage classes submitted through Slurm instead of PBS.
+
+params: runs.psv
+width: 2
+scheduler: slurm
+
+schema:
+  name: slurm-input
+  format: {delimiter: pipe, header: true, id_field: run_id}
+  fields:
+    - {name: run_id,     type: regex, pattern: "[A-Za-z0-9_-]+"}
+    - {name: input_file, type: path_exists, must_be_file: true}
+
+pipeline:
+  stage_module: stages.py
+  stages:
+    - {name: prep, walltime: "00:05:00", ncpus: 1, mem: "2GB"}
+    - {name: finish, depends: afterany}

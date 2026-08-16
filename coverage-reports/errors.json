@@ -1,0 +1,74 @@
+{
+  "label": "errors",
+  "modules": [
+    "tests.test_errors"
+  ],
+  "tests_run": 34,
+  "failures": 0,
+  "errors": 0,
+  "per_module": {
+    "__init__.py": {
+      "executable_lines": 9,
+      "hit_lines": 9,
+      "percent": 100.0
+    },
+    "__main__.py": {
+      "executable_lines": 5,
+      "hit_lines": 0,
+      "percent": 0.0
+    },
+    "cli.py": {
+      "executable_lines": 606,
+      "hit_lines": 212,
+      "percent": 35.0
+    },
+    "config.py": {
+      "executable_lines": 202,
+      "hit_lines": 155,
+      "percent": 76.7
+    },
+    "core.py": {
+      "executable_lines": 108,
+      "hit_lines": 103,
+      "percent": 95.4
+    },
+    "operations.py": {
+      "executable_lines": 699,
+      "hit_lines": 312,
+      "percent": 44.6
+    },
+    "parse.py": {
+      "executable_lines": 295,
+      "hit_lines": 175,
+      "percent": 59.3
+    },
+    "pipeline.py": {
+      "executable_lines": 277,
+      "hit_lines": 174,
+      "percent": 62.8
+    },
+    "report.py": {
+      "executable_lines": 374,
+      "hit_lines": 74,
+      "percent": 19.8
+    },
+    "scheduler.py": {
+      "executable_lines": 288,
+      "hit_lines": 111,
+      "percent": 38.5
+    },
+    "schema.py": {
+      "executable_lines": 664,
+      "hit_lines": 318,
+      "percent": 47.9
+    },
+    "store.py": {
+      "executable_lines": 488,
+      "hit_lines": 364,
+      "percent": 74.6
+    }
+  },
+  "total_executable_lines": 4015,
+  "total_hit_lines": 2007,
+  "total_percent": 50.0
+}

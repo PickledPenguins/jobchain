@@ -1,0 +1,35 @@
+# Example run configuration: one file describes the whole run.
+name: solver-example
+description: Three-stage solve over a small parameter sweep.
+
+params: runs.psv
+width: 2
+
+schema:
+  name: solver-input
+  format:
+    delimiter: pipe
+    header: true
+    comment: "#"
+    id_field: run_id
+  fields:
+    - {name: run_id,     type: regex, pattern: "[A-Za-z0-9_-]+"}
+    - {name: input_file, type: path_exists, must_be_file: true}
+    - {name: output_dir, type: str, unique: true}
+    - {name: mode,       type: one_of, values: [cpu, gpu], case_sensitive: false}
+    - {name: threads,    type: int, min: 1, max: 128}
+    - {name: mesh_size,  type: one_of, values: [small, medium, large]}
+    - {name: tolerance,  type: float, min: 0.0, max: 1.0}
+
+pipeline:
+  name: solver-pipeline
+  stage_module: stages.py
+  defaults:
+    queue: normal
+  stages:
+    - {name: prep,    walltime: "00:30:00", ncpus: 2}
+    - {name: solve,   depends: afterok, precision: double}
+    - {name: archive, depends: afterany, walltime: "01:00:00", ncpus: 1}
+
+paths:
+  work_dir: "{run.home}/work/{row.name}"

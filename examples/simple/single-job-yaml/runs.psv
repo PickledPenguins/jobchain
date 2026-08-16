@@ -1,0 +1,4 @@
+run_id|input_file|copies
+job-one|data/one.txt|1
+job-two|data/two.txt|3
+job-three|data/three.txt|2

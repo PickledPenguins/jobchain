@@ -1,0 +1,13 @@
+2026-08-15 03:26:54,318 DEBUG   scan complete: 1 row(s), 1 valid, 0 invalid, 0 file-level failure(s)
+2026-08-15 03:26:54,321 DEBUG   stripped a UTF-8 byte-order mark from /tmp/tmpjygn1hus
+2026-08-15 03:26:54,321 DEBUG   normalized /tmp/tmpjygn1hus: 1 rows, 1 changed, 0 blank, 0 comment, expecting 1 fields
+2026-08-15 03:26:54,321 DEBUG   normalized /tmp/tmphbfy8ohy: 1 rows, 0 changed, 0 blank, 0 comment, expecting 2 fields
+2026-08-15 03:26:54,322 DEBUG   scan complete: 1 row(s), 0 valid, 1 invalid, 0 file-level failure(s)
+2026-08-15 03:26:54,322 DEBUG   scan complete: 2 row(s), 0 valid, 2 invalid, 0 file-level failure(s)
+2026-08-15 03:26:54,342 INFO    row a: cancelled 1 job(s)
+2026-08-15 03:26:54,348 INFO    row r re-queued at generation 2
+2026-08-15 03:26:54,349 INFO    0 row(s) read, 0 normalized, 0 blank and 0 comment line(s) skipped
+2026-08-15 03:26:54,349 WARNING row 2 invalid: bad
+2026-08-15 03:26:54,349 INFO    0 of 1 row(s) valid
+2026-08-15 03:26:54,353 INFO    1 pipeline(s) already in flight against a ceiling of 1; launching 0 instead of 2
+2026-08-15 03:26:54,353 ERROR   chain 1: row r failed to submit: bad

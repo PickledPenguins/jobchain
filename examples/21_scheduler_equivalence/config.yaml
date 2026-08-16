@@ -1,0 +1,16 @@
+name: example-scheduler-equivalence
+description: Scheduler-neutral pipeline rendered for PBS and Slurm.
+params: params.psv
+scheduler: pbs
+schema:
+  name: scheduler
+  format: {delimiter: pipe, header: true, id_field: case}
+  fields:
+    - {name: case, type: regex, pattern: "[a-z]+"}
+    - {name: cpus, type: int, min: 1, max: 16}
+pipeline:
+  name: scheduler-equivalence
+  defaults: {queue: normal, account: project, mem: 2gb, walltime: "00:15:00", extra_directives: ["# custom-directive"]}
+  stages:
+    - {name: work, command: 'printf "%s\n" "$JC_case"', ncpus: 1}
+    - {name: finish, command: 'printf "done:%s\n" "$JC_case"', depends: afterany, ncpus: 1}

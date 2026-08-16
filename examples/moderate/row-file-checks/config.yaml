@@ -1,0 +1,46 @@
+# Single-job pipeline whose entire point is the schema's row_checks and
+# file_checks, not the stage itself. Five rows: two valid, three each
+# violating exactly one check, so --check's report demonstrates all four
+# validator types firing independently.
+name: row-file-checks
+description: "required_when, compare (row checks); unique, row_count (file checks)."
+
+params: runs.psv
+width: 2
+
+schema:
+  name: check-demo
+  format: {delimiter: pipe, header: true, id_field: run_id}
+  fields:
+    - {name: run_id,     type: regex, pattern: "[A-Za-z0-9_-]+"}
+    - {name: input_file, type: path_exists, must_be_file: true}
+    - {name: output_dir, type: str, min_length: 1}
+    - {name: mode,       type: one_of, values: [cpu, gpu]}
+    - {name: threads,    type: int, min: 1, max: 64}
+    # optional: blank is allowed here; required_when makes it mandatory
+    # only for gpu rows
+    - {name: ngpus,      type: int, min: 0, max: 8, optional: true}
+
+  row_checks:
+    - type: required_when
+      when_field: mode
+      equals: gpu
+      require_field: ngpus
+    - type: compare
+      left: ngpus
+      op: "<="
+      right: threads
+      # only meaningful once both sides are present; an absent ngpus is
+      # required_when's problem, not compare's (see Comparison.check)
+
+  file_checks:
+    - type: unique
+      fields: [output_dir]
+    - type: row_count
+      min: 3
+      max: 20
+
+pipeline:
+  stages:
+    - name: touch
+      command: mkdir -p "{run.home}/{row.output_dir}"

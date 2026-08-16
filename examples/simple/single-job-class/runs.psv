@@ -1,0 +1,4 @@
+run_id,dataset,mode,scale_factor
+run-alpha,data/alpha.dat,fast,1.0
+run-bravo,data/bravo.dat,accurate,2.5
+run-charlie,data/charlie.dat,fast,0.5

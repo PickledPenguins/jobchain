@@ -1,0 +1,17 @@
+name: concurrency-demo
+params: params.psv
+width: 1
+scheduler: pbs
+
+schema:
+  name: simple
+  format: {delimiter: pipe, header: true, id_field: rid}
+  fields:
+    - {name: rid, type: regex, pattern: "[a-z0-9]+"}
+    - {name: count, type: int, min: 1, max: 100}
+    - {name: label, type: str, optional: true}
+
+pipeline:
+  name: single
+  stages:
+    - {name: work, command: "true"}

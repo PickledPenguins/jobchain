@@ -1,0 +1,6 @@
+2026-08-15 03:25:03,601 DEBUG   scan complete: 1 row(s), 1 valid, 0 invalid, 0 file-level failure(s)
+2026-08-15 03:25:03,604 DEBUG   stripped a UTF-8 byte-order mark from /tmp/tmpge782vxq
+2026-08-15 03:25:03,604 DEBUG   normalized /tmp/tmpge782vxq: 1 rows, 1 changed, 0 blank, 0 comment, expecting 1 fields
+2026-08-15 03:25:03,605 DEBUG   normalized /tmp/tmp47_t17rj: 1 rows, 0 changed, 0 blank, 0 comment, expecting 2 fields
+2026-08-15 03:25:03,606 DEBUG   scan complete: 1 row(s), 0 valid, 1 invalid, 0 file-level failure(s)
+2026-08-15 03:25:03,606 DEBUG   scan complete: 2 row(s), 0 valid, 2 invalid, 0 file-level failure(s)
