@@ -80,7 +80,7 @@ class TestHelperFaults(TempCase):
     def test_claim_rejects_malformed_success_output(self):
         store = Store(self.path("run"), node_binary="jobchain-node")
         completed = subprocess.CompletedProcess([], 0, "unexpected\n", "")
-        with patch.object(store, "_run_node", return_value=completed), self.assertRaises(
+        with patch.object(store._node, "_run_node", return_value=completed), self.assertRaises(
             NodeHelperError
         ):
             store.claim()
@@ -88,7 +88,7 @@ class TestHelperFaults(TempCase):
     def test_claim_reports_helper_failure_diagnostic(self):
         store = Store(self.path("run"), node_binary="jobchain-node")
         completed = subprocess.CompletedProcess([], 17, "", "permission denied")
-        with patch.object(store, "_run_node", return_value=completed), self.assertRaisesRegex(
+        with patch.object(store._node, "_run_node", return_value=completed), self.assertRaisesRegex(
             NodeHelperError, "permission denied"
         ):
             store.claim()
@@ -96,7 +96,7 @@ class TestHelperFaults(TempCase):
     def test_mark_reports_helper_failure_diagnostic(self):
         store = Store(self.path("run"), node_binary="jobchain-node")
         completed = subprocess.CompletedProcess([], 2, "", "bad run directory")
-        with patch.object(store, "_run_node", return_value=completed), self.assertRaisesRegex(
+        with patch.object(store._node, "_run_node", return_value=completed), self.assertRaisesRegex(
             NodeHelperError, "bad run directory"
         ):
             store.mark(self.path("run-1"), "main", status="DONE")

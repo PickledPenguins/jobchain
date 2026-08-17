@@ -19,6 +19,7 @@ from jobchain.store import (
     DONE,
     PENDING,
     ManifestEntry,
+    NodeHelperClient,
     RowState,
     RowStatus,
     RunState,
@@ -517,26 +518,26 @@ class TestStoreDeep(unittest.TestCase):
 
     def test_claim_handles_empty_success_output(self):
         result = SimpleNamespace(returncode=0, stdout="", stderr="")
-        with patch.object(self.store, "_run_node", return_value=result), self.assertRaises(
+        with patch.object(self.store._node, "_run_node", return_value=result), self.assertRaises(
             NodeHelperError
         ):
             self.store.claim()
 
     def test_claim_returns_none_for_exhausted_queue(self):
         result = SimpleNamespace(returncode=3, stdout="", stderr="")
-        with patch.object(self.store, "_run_node", return_value=result):
+        with patch.object(self.store._node, "_run_node", return_value=result):
             self.assertIsNone(self.store.claim())
 
     def test_claim_reports_helper_failure(self):
         result = SimpleNamespace(returncode=2, stdout="", stderr="boom")
-        with patch.object(self.store, "_run_node", return_value=result), self.assertRaisesRegex(
+        with patch.object(self.store._node, "_run_node", return_value=result), self.assertRaisesRegex(
             NodeHelperError, "boom"
         ):
             self.store.claim()
 
     def test_mark_builds_all_optional_arguments(self):
         result = SimpleNamespace(returncode=0, stdout="", stderr="")
-        with patch.object(self.store, "_run_node", return_value=result) as run:
+        with patch.object(self.store._node, "_run_node", return_value=result) as run:
             self.store.mark("/run/1", "solve", status="RUNNING", jobid="42", error="bad")
         self.assertEqual(
             run.call_args.args[0],
@@ -557,15 +558,15 @@ class TestStoreDeep(unittest.TestCase):
 
     def test_mark_reports_failure(self):
         result = SimpleNamespace(returncode=1, stdout="", stderr="bad mark")
-        with patch.object(self.store, "_run_node", return_value=result), self.assertRaisesRegex(
+        with patch.object(self.store._node, "_run_node", return_value=result), self.assertRaisesRegex(
             NodeHelperError, "bad mark"
         ):
             self.store.mark("/run", "s")
 
     def test_event_logs_warning_on_helper_failure(self):
         result = SimpleNamespace(returncode=1, stdout="", stderr="event failed")
-        with patch.object(self.store, "_run_node", return_value=result), patch(
-            "jobchain.store.core.get_logger"
+        with patch.object(self.store._node, "_run_node", return_value=result), patch(
+            "jobchain.store.node_client.get_logger"
         ) as logger:
             self.store.event("hello")
             logger.return_value.warning.assert_called_once()
@@ -573,9 +574,9 @@ class TestStoreDeep(unittest.TestCase):
     def test_selftest_returns_success_and_failure(self):
         ok = SimpleNamespace(returncode=0, stdout="ok\n", stderr="")
         bad = SimpleNamespace(returncode=1, stdout="", stderr="bad")
-        with patch.object(self.store, "_run_node", return_value=ok):
+        with patch.object(self.store._node, "_run_node", return_value=ok):
             self.assertEqual(self.store.selftest(), (True, "ok"))
-        with patch.object(self.store, "_run_node", return_value=bad):
+        with patch.object(self.store._node, "_run_node", return_value=bad):
             self.assertEqual(self.store.selftest(), (False, "bad"))
 
     def test_read_helpers_return_defaults_on_invalid_data(self):
@@ -603,7 +604,7 @@ class TestStoreRemaining(unittest.TestCase):
 
     def test_node_binary_lazy_lookup(self):
         store = Store("/tmp/jobchain-store-test")
-        with patch("jobchain.store.core.find_node_binary", return_value="/node") as find:
+        with patch("jobchain.store.node_client.find_node_binary", return_value="/node") as find:
             self.assertEqual(store.node_binary, "/node")
             self.assertEqual(store.node_binary, "/node")
         find.assert_called_once()
@@ -661,8 +662,8 @@ class TestStoreRemaining(unittest.TestCase):
     def test_event_failure_only_warns(self):
         store = Store("/tmp/x")
         result = SimpleNamespace(returncode=1, stderr="bad", stdout="")
-        with patch.object(store, "_run_node", return_value=result), patch(
-            "jobchain.store.core.get_logger"
+        with patch.object(store._node, "_run_node", return_value=result), patch(
+            "jobchain.store.node_client.get_logger"
         ) as logger:
             store.event("x")
         logger.return_value.warning.assert_called_once()
@@ -687,7 +688,7 @@ class TestStoreRemaining(unittest.TestCase):
 
     def test_find_node_binary_failure_is_propagated(self):
         with patch(
-            "jobchain.store.core.find_node_binary", side_effect=StateError("missing")
+            "jobchain.store.node_client.find_node_binary", side_effect=StateError("missing")
         ), self.assertRaises(StateError):
             _ = Store("/tmp/x").node_binary
 
@@ -755,14 +756,14 @@ class TestStoreLastBranches(unittest.TestCase):
     def test_event_success_does_not_warn(self):
         result = SimpleNamespace(returncode=0, stderr="")
         with tempfile.TemporaryDirectory() as d, patch.object(
-            Store, "_run_node", return_value=result
-        ), patch("jobchain.store.core.get_logger") as logger:
+            NodeHelperClient, "_run_node", return_value=result
+        ), patch("jobchain.store.node_client.get_logger") as logger:
             Store(d).event("hello")
         logger.return_value.warning.assert_not_called()
 
     def test_mark_success_does_not_raise(self):
         result = SimpleNamespace(returncode=0, stderr="")
         with tempfile.TemporaryDirectory() as d, patch.object(
-            Store, "_run_node", return_value=result
+            NodeHelperClient, "_run_node", return_value=result
         ):
             Store(d).mark("run", "stage", status=DONE, jobid="7", error="")

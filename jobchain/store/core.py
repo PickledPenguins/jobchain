@@ -9,12 +9,11 @@ import subprocess
 import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from ..core import VERSION, NodeHelperError, StateError, get_logger, trace
+from ..core import VERSION, StateError
 from .io import (
     _column_value,
     _hostname,
     _pad,
-    _parse_assignments,
     _parse_handoff,
     _read_json,
     _read_lines,
@@ -26,7 +25,7 @@ from .io import (
     shell_quote,
 )
 from .model import DEFAULT_ROOT, PENDING, ManifestEntry, RowState, RunState, StageState
-from .node import find_node_binary
+from .node_client import NodeHelperClient
 
 
 class Store:
@@ -34,7 +33,7 @@ class Store:
 
     def __init__(self, home: str, node_binary: Optional[str] = None):
         self.home = os.path.abspath(home)
-        self._node_binary = node_binary
+        self._node = NodeHelperClient(self.home, node_binary)
 
     # -- discovery -------------------------------------------------------
 
@@ -73,9 +72,7 @@ class Store:
 
     @property
     def node_binary(self) -> str:
-        if self._node_binary is None:
-            self._node_binary = find_node_binary()
-        return self._node_binary
+        return self._node.node_binary
 
     # -- paths -----------------------------------------------------------
 
@@ -458,24 +455,15 @@ class Store:
                 return row
         raise StateError(f"no row matches '{identifier}'")
 
-    # -- helper invocation -----------------------------------------------
+    # -- helper invocation -------------------------------------------------
+    # Thin delegations to NodeHelperClient (node_client.py): claiming and
+    # recording status means shelling out to the compiled or shell
+    # compute-node helper, a genuinely different concern from everything
+    # else in this class, which only reads and writes this run's own files.
 
     def claim(self) -> Optional[Tuple[str, str]]:
         """Claim the next eligible row via the compiled helper."""
-        result = self._run_node(["claim", "--home", self.home])
-        if result.returncode == 3:
-            return None
-        if result.returncode != 0:
-            raise NodeHelperError(
-                f"claim failed ({result.returncode}): "
-                f"{result.stderr.strip() or 'no diagnostic'}"
-            )
-        assignments = _parse_assignments(result.stdout)
-        try:
-            return assignments["JC_NEXT_ROW"], assignments["JC_NEXT_RUN"]
-        except KeyError as exc:
-            raise NodeHelperError(
-                f"claim produced unexpected output: {result.stdout!r}") from exc
+        return self._node.claim()
 
     def mark(self, run_dir: str, stage: str, status: Optional[str] = None,
              jobid: Optional[str] = None, error: Optional[str] = None) -> None:
@@ -486,32 +474,15 @@ class Store:
         already be running and may have written its own status, which must
         not be overwritten.
         """
-        command = ["mark", "--run", run_dir, "--stage", stage]
-        if status:
-            command += ["--status", status]
-        if jobid:
-            command += ["--jobid", jobid]
-        if error:
-            command += ["--error", error]
-        result = self._run_node(command)
-        if result.returncode != 0:
-            raise NodeHelperError(
-                f"mark failed ({result.returncode}): "
-                f"{result.stderr.strip() or 'no diagnostic'}"
-            )
+        self._node.mark(run_dir, stage, status, jobid, error)
 
     def event(self, message: str) -> None:
         """Append a message to the run's event log."""
-        result = self._run_node(["event", "--home", self.home, "--message", message])
-        if result.returncode != 0:
-            get_logger().warning("could not write event log: %s",
-                                 result.stderr.strip())
+        self._node.event(message)
 
     def selftest(self) -> Tuple[bool, str]:
         """Verify the filesystem supports the claim protocol."""
-        os.makedirs(self.home, exist_ok=True)
-        result = self._run_node(["selftest", "--home", self.home])
-        return result.returncode == 0, (result.stdout + result.stderr).strip()
+        return self._node.selftest()
 
     def write_resources(self, run_dir: str, stage: str,
                         resources: Dict[str, Any]) -> None:
@@ -522,14 +493,7 @@ class Store:
                      if v not in (None, "", [], {})})
 
     def _run_node(self, arguments: List[str]) -> subprocess.CompletedProcess:
-        command = [self.node_binary, *arguments]
-        trace("node helper: %s", " ".join(command))
-        try:
-            return subprocess.run(command, capture_output=True, text=True,
-                                  check=False)
-        except OSError as exc:
-            raise NodeHelperError(
-                f"could not execute {self.node_binary}: {exc}") from exc
+        return self._node._run_node(arguments)
 
     # -- reporting -------------------------------------------------------
 
