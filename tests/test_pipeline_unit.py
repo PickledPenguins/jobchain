@@ -14,6 +14,7 @@ from jobchain.pipeline import (
     Integer,
     JobStage,
     Setting,
+    StageBool,
     Text,
     describe_pipeline,
     load_pipeline_source,
@@ -65,9 +66,16 @@ class TestSettingPrimitives(unittest.TestCase):
         self.assertEqual(Choice([1, 2]).check("x", 2), 2)
 
     def test_bool_accepts_true_and_false(self):
-        setting = Bool()
+        setting = StageBool()
         self.assertTrue(setting.check("x", True))
         self.assertFalse(setting.check("x", False))
+
+    def test_bool_is_a_deprecated_alias_for_stage_bool(self):
+        # jobchain.schema also has a Bool -- an unrelated field validator --
+        # so the pipeline setting's own class is named StageBool. Bool is
+        # kept importable from here, as the same object, for callers who
+        # imported it before the rename.
+        self.assertIs(Bool, StageBool)
 
     def test_integer_bounds_are_independent(self):
         self.assertEqual(Integer(min=2).check("x", "2"), 2)

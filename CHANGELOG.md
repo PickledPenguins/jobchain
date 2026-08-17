@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- `jobchain.pipeline.Bool` (a stage-setting type) is renamed to
+  `jobchain.pipeline.StageBool`, so it no longer shares a bare name with the
+  unrelated `jobchain.schema.Bool` (a field validator) — the two classes
+  used to collide under the same name in their own modules, disambiguated
+  only by the alias `jobchain.__init__` applied on import. `Bool` remains
+  importable from `jobchain.pipeline` as a deprecated alias for
+  `StageBool`; the public `jobchain.StageBool` name is unchanged.
+
 ## 0.6 — version unification and a branch-wide cleanup pass
 
 - Collapsed the scattered `0.5`, `0.5-v4b`, `0.5v5c` version identifiers

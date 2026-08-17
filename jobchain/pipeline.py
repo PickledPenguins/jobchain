@@ -80,8 +80,18 @@ class Choice(Setting):
         return "one of: " + ", ".join(str(v) for v in self.values)
 
 
-class Bool(Setting):
-    """A boolean setting."""
+class StageBool(Setting):
+    """A boolean setting.
+
+    Named ``StageBool`` rather than ``Bool`` because ``jobchain.schema``
+    already has a ``Bool`` -- a field *validator* for a boolean-typed
+    parameter-file column, an unrelated concept. The two were previously
+    both named ``Bool`` in their own modules (disambiguated only by the
+    alias ``jobchain.__init__`` applied on import), which meant importing
+    directly from a submodule -- ``from jobchain.pipeline import Bool`` vs
+    ``from jobchain.schema import Bool`` -- silently got two different
+    classes under the same name.
+    """
 
     def check(self, name: str, value: Any) -> Any:
         if isinstance(value, bool):
@@ -90,6 +100,11 @@ class Bool(Setting):
 
     def describe(self) -> str:
         return "true or false"
+
+
+#: Deprecated: use ``StageBool``. Kept so ``from jobchain.pipeline import
+#: Bool`` continues to work for existing callers.
+Bool = StageBool
 
 
 class Integer(Setting):

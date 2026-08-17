@@ -367,14 +367,14 @@ class TestFinalSmallGaps(unittest.TestCase):
                 load_config(p)
 
     def test_pipeline_settings_freeze_and_resources(self):
-        from jobchain.pipeline import Bool, Choice, Integer, Text
+        from jobchain.pipeline import Choice, Integer, StageBool, Text
 
         self.assertEqual(Choice([1]).check("x", 1), 1)
         with self.assertRaises(PipelineError):
             Choice([1]).check("x", 2)
-        self.assertTrue(Bool().check("x", True))
+        self.assertTrue(StageBool().check("x", True))
         with self.assertRaises(PipelineError):
-            Bool().check("x", 1)
+            StageBool().check("x", 1)
         self.assertEqual(Integer(min=2, max=4).check("x", "3"), 3)
         with self.assertRaises(PipelineError):
             Integer(min=2).check("x", 1)
@@ -383,6 +383,15 @@ class TestFinalSmallGaps(unittest.TestCase):
         with self.assertRaises(PipelineError):
             Integer().check("x", "no")
         self.assertEqual(Text().check("x", 3), "3")
+
+    def test_stage_bool_and_schema_bool_are_distinct_classes(self):
+        # jobchain.StageBool (a pipeline-stage setting) and jobchain.Bool
+        # (a schema field validator) were once both defined as "Bool" in
+        # their own modules; only jobchain.__init__'s alias kept them apart.
+        # Now the classes themselves have distinct names.
+        import jobchain
+
+        self.assertIsNot(jobchain.StageBool, jobchain.Bool)
 
         class R(JobStage):
             def resources(self, row):

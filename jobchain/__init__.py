@@ -22,13 +22,13 @@ from .core import (
     UsageError,
 )
 from .parse import ScanReport, scan
-from .pipeline import Bool as StageBool
 from .pipeline import (
     Choice,
     Integer,
     JobStage,
     Pipeline,
     Setting,
+    StageBool,
     Text,
     load_pipeline_source,
 )
