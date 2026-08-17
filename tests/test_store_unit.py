@@ -3,36 +3,57 @@
 Consolidated from test_store_{unit,deep,exhaustive}.py into one file,
 matching this project's one-file-per-subsystem convention.
 """
+
 from __future__ import annotations
 
 import json
 import os
 import tempfile
 import unittest
-from unittest.mock import patch
-from jobchain.core import NodeHelperError, StateError
-from jobchain.store import Store, DONE, PENDING, RowState, RunState, StageState
 from types import SimpleNamespace
-from jobchain.core import NodeHelperError
-from jobchain.store import PENDING, DONE
-from jobchain.store import Store, find_node_binary, _column_value, _read_json, _read_optional
+from unittest.mock import patch
+
+from jobchain.core import NodeHelperError, StateError
 from jobchain.store import (
-    DONE, FAILED, PENDING, CANCELLED, RowState, RunState, StageState, Store,
+    CANCELLED,
+    DONE,
+    PENDING,
+    RowState,
+    RunState,
+    StageState,
+    Store,
+    _column_value,
+    _read_json,
+    _read_optional,
     _write_text,
+    find_node_binary,
 )
-from jobchain.core import StateError
 
 
 # from test_store_exhaustive.py
-def stage(name="s",status=DONE,jobid="1"):
-    return StageState(name=name,status=status,jobid=jobid,depends="afterok",resources={},timeline=[])
+def stage(name="s", status=DONE, jobid="1"):
+    return StageState(
+        name=name, status=status, jobid=jobid, depends="afterok", resources={}, timeline=[]
+    )
 
 
 # from test_store_exhaustive.py
-def row(rid="001",runs=None):
+def row(rid="001", runs=None):
     if runs is None:
-        runs=[RunState(generation=1,stages=[stage()])]
-    return RowState(name=rid,row_id=rid,line_num=2,index=0,params={"rid":rid},generation=1,runs=runs,valid=True,invalid_reasons=[],failure_id="",work_dir="")
+        runs = [RunState(generation=1, stages=[stage()])]
+    return RowState(
+        name=rid,
+        row_id=rid,
+        line_num=2,
+        index=0,
+        params={"rid": rid},
+        generation=1,
+        runs=runs,
+        valid=True,
+        invalid_reasons=[],
+        failure_id="",
+        work_dir="",
+    )
 
 
 class TestStorePathsAndDiscovery(unittest.TestCase):
@@ -145,10 +166,14 @@ class TestStoreLifecycle(unittest.TestCase):
     def test_manifest_round_trip_skips_blank_and_malformed_lines(self):
         self.store.create({})
         os.makedirs(self.store.row_dir("000001"))
-        with open(os.path.join(self.store.row_dir("000001"), "manifest"), "w", encoding="utf-8") as f:
+        with open(
+            os.path.join(self.store.row_dir("000001"), "manifest"), "w", encoding="utf-8"
+        ) as f:
             f.write("prep\t-\tprep.sh\n\nmalformed\ttoo\nmix\tafterok\tsolve.sh\n")
-        self.assertEqual(self.store.read_manifest("000001"),
-                         [("prep", "-", "prep.sh"), ("mix", "afterok", "solve.sh")])
+        self.assertEqual(
+            self.store.read_manifest("000001"),
+            [("prep", "-", "prep.sh"), ("mix", "afterok", "solve.sh")],
+        )
 
     def test_hold_and_release(self):
         self.store.create({})
@@ -161,9 +186,18 @@ class TestStoreLifecycle(unittest.TestCase):
 
     def test_write_row_loads_identity_and_parameters(self):
         self.store.create({})
-        self.store.write_row("000001", "row-A", 7, 2, {"x": 3}, valid=False,
-                             invalid_reasons=["bad"], failure_id="4", work_dir="/tmp/w",
-                             raw_fields=["row-A", "3"])
+        self.store.write_row(
+            "000001",
+            "row-A",
+            7,
+            2,
+            {"x": 3},
+            valid=False,
+            invalid_reasons=["bad"],
+            failure_id="4",
+            work_dir="/tmp/w",
+            raw_fields=["row-A", "3"],
+        )
         row = self.store.load_row("000001")
         self.assertEqual(row.row_id, "row-A")
         self.assertEqual(row.line_num, 7)
@@ -189,7 +223,9 @@ class TestStoreLifecycle(unittest.TestCase):
         self.store.create({})
         self.store.write_row("000001", "a", 2, 0, {})
         self.store.seed_handoff("000001", {"z": "last", "a": "first"})
-        with open(os.path.join(self.store.row_dir("000001"), "handoff.seed"), encoding="utf-8") as f:
+        with open(
+            os.path.join(self.store.row_dir("000001"), "handoff.seed"), encoding="utf-8"
+        ) as f:
             text = f.read()
         self.assertLess(text.index("JC_OUT_a"), text.index("JC_OUT_z"))
         self.store.clear_handoff_seed("000001")
@@ -209,7 +245,9 @@ class TestStoreResolutionAndSerialization(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.store = Store(os.path.join(self.tmp.name, "run"), node_binary="/bin/false")
         self.store.create({})
-        for i, (name, rowid, value) in enumerate((("000001", "A", "x"), ("000002", "B", "y")), start=0):
+        for i, (name, rowid, value) in enumerate(
+            (("000001", "A", "x"), ("000002", "B", "y")), start=0
+        ):
             self.store.write_row(name, rowid, i + 2, i, {"id": rowid, "value": value})
         self.store.write_index(["000001", "000002"])
 
@@ -244,7 +282,9 @@ class TestStoreResolutionAndSerialization(unittest.TestCase):
         self.assertEqual(self.store.read_events(), [])
 
     def test_resources_filters_empty_values(self):
-        self.store.write_resources("/tmp/run", "solve", {"ncpus": 4, "mem": "", "gpu": None, "tags": []})
+        self.store.write_resources(
+            "/tmp/run", "solve", {"ncpus": 4, "mem": "", "gpu": None, "tags": []}
+        )
         with open("/tmp/run/resources.solve.json", encoding="utf-8") as f:
             self.assertEqual(json.load(f), {"ncpus": 4})
 
@@ -266,17 +306,37 @@ class TestStoreDerivedState(unittest.TestCase):
         self.assertEqual(row.jobid, "42")
 
     def test_row_stage_reached_uses_last_nonpending_stage(self):
-        row = RowState("1", "1", 2, 0, {}, 1, runs=[RunState(1, stages=[
-            StageState("prep", DONE), StageState("solve"), StageState("archive")])])
+        row = RowState(
+            "1",
+            "1",
+            2,
+            0,
+            {},
+            1,
+            runs=[
+                RunState(
+                    1, stages=[StageState("prep", DONE), StageState("solve"), StageState("archive")]
+                )
+            ],
+        )
         self.assertEqual(row.stage_reached, "prep")
 
     def test_row_terminal_detects_done_failure_and_cancel(self):
         for status, error in ((DONE, None), ("FAILED", "exit 1"), ("CANCELLED", None)):
-            row = RowState("1", "1", 2, 0, {}, 1, runs=[RunState(1, stages=[StageState("solve", status, error=error)])])
+            row = RowState(
+                "1",
+                "1",
+                2,
+                0,
+                {},
+                1,
+                runs=[RunState(1, stages=[StageState("solve", status, error=error)])],
+            )
             self.assertTrue(row.is_terminal)
 
     def test_failure_code_extracts_numeric_code(self):
         from jobchain.store import _code_of
+
         self.assertEqual(_code_of("exit code 17 from scheduler"), "17")
         self.assertEqual(_code_of("nothing numeric"), "error")
         self.assertEqual(_code_of(None), "unknown")
@@ -285,6 +345,7 @@ class TestStoreDerivedState(unittest.TestCase):
 class TestStoreParsingHelpers(unittest.TestCase):
     def test_render_env_quotes_values_and_handles_none_and_bool(self):
         from jobchain.store import render_env
+
         text = render_env({"z": "it's here", "flag": True, "off": False, "none": None})
         self.assertIn("JC_z='it'\\''s here'", text)
         self.assertIn("JC_flag='1'", text)
@@ -293,16 +354,22 @@ class TestStoreParsingHelpers(unittest.TestCase):
 
     def test_handoff_parser_ignores_nonhandoff_lines_and_unquotes(self):
         from jobchain.store import _parse_handoff
-        self.assertEqual(_parse_handoff("x=y\nJC_OUT_a='it'\\''s'\nJC_OUT_b=plain\n"),
-                         {"a": "it's", "b": "plain"})
+
+        self.assertEqual(
+            _parse_handoff("x=y\nJC_OUT_a='it'\\''s'\nJC_OUT_b=plain\n"),
+            {"a": "it's", "b": "plain"},
+        )
 
     def test_assignment_parser_strips_keys_and_values(self):
         from jobchain.store import _parse_assignments
-        self.assertEqual(_parse_assignments(" A = one\nB= two\nignored\n"),
-                         {"A": "one", "B": "two"})
+
+        self.assertEqual(
+            _parse_assignments(" A = one\nB= two\nignored\n"), {"A": "one", "B": "two"}
+        )
 
     def test_row_name_and_padding(self):
-        from jobchain.store import row_name, _pad
+        from jobchain.store import _pad, row_name
+
         self.assertEqual(row_name(0), "000001")
         self.assertEqual(_pad("42"), "000042")
 
@@ -313,7 +380,9 @@ class TestStoreParsingHelpers(unittest.TestCase):
             os.makedirs(store.row_dir("000001"))
             with self.assertRaises(StateError):
                 store.load_row("000001")
-            with open(os.path.join(store.row_dir("000001"), "meta.json"), "w", encoding="utf-8") as f:
+            with open(
+                os.path.join(store.row_dir("000001"), "meta.json"), "w", encoding="utf-8"
+            ) as f:
                 f.write("broken")
             with self.assertRaises(StateError):
                 store.load_row("000001")
@@ -362,18 +431,20 @@ class TestStoreDeep(unittest.TestCase):
         # checkout, so leaving it reachable would make the "not found"
         # path untestable no matter how the other two candidates are
         # mocked.
-        with patch.dict(os.environ, {}, clear=True), \
-                patch("jobchain.store.shutil.which", return_value=None), \
-                patch("jobchain.store.os.access", return_value=False):
-            with self.assertRaisesRegex(NodeHelperError, "could not be found"):
-                find_node_binary(explicit=None)
+        with patch.dict(os.environ, {}, clear=True), patch(
+            "jobchain.store.shutil.which", return_value=None
+        ), patch("jobchain.store.os.access", return_value=False), self.assertRaisesRegex(
+            NodeHelperError, "could not be found"
+        ):
+            find_node_binary(explicit=None)
 
     def test_node_binary_explicit_missing_is_reported(self):
-        with patch.dict(os.environ, {}, clear=True), \
-                patch("jobchain.store.shutil.which", return_value=None), \
-                patch("jobchain.store.os.access", return_value=False):
-            with self.assertRaisesRegex(NodeHelperError, "--node-binary"):
-                find_node_binary("/does/not/exist")
+        with patch.dict(os.environ, {}, clear=True), patch(
+            "jobchain.store.shutil.which", return_value=None
+        ), patch("jobchain.store.os.access", return_value=False), self.assertRaisesRegex(
+            NodeHelperError, "--node-binary"
+        ):
+            find_node_binary("/does/not/exist")
 
     def test_load_row_ignores_invalid_generation_directory_names(self):
         self.store.create({})
@@ -392,7 +463,9 @@ class TestStoreDeep(unittest.TestCase):
             h.write("JC_OUT_A=seed\n")
         with open(os.path.join(run, "handoff"), "w") as h:
             h.write("JC_OUT_A=local\nJC_OUT_B=two\n")
-        self.store.write_manifest("000001", [("prep", "-", "prep.sh"), ("solve", "afterok", "solve.sh")])
+        self.store.write_manifest(
+            "000001", [("prep", "-", "prep.sh"), ("solve", "afterok", "solve.sh")]
+        )
         run2 = self.store.run_dir("000001", 2)
         os.makedirs(run2, exist_ok=True)
         with open(os.path.join(self.store.row_dir("000001"), "gen"), "w") as h:
@@ -402,17 +475,25 @@ class TestStoreDeep(unittest.TestCase):
         self.assertEqual(loaded.runs[0].stages[0].status, PENDING)
         self.assertEqual(loaded.runs[0].stages[1].depends, "afterok")
 
-    def test_column_value_returns_empty_when_untyped(self):
+    def test_column_value_falls_back_to_raw_fields_by_position_when_untyped(self):
         from jobchain.store import RowState
+
         row = RowState("1", "id", 1, 0, {}, 1, raw_fields=["id", "x"])
-        self.assertEqual(_column_value(row, "missing", ["missing"]), "")
-        self.assertEqual(_column_value(row, "missing", None), "")
+        # An unvalidated row has no typed params, so the column's raw text is
+        # located by its position in the schema's field order instead.
+        self.assertEqual(_column_value(row, "id", ["id", "other"]), "id")
+        self.assertEqual(_column_value(row, "other", ["id", "other"]), "x")
+        # A column absent from field_names, or no field_names at all (no
+        # schema to consult), cannot be positioned, so it falls back to "".
+        self.assertEqual(_column_value(row, "missing", ["id", "other"]), "")
+        self.assertEqual(_column_value(row, "id", None), "")
 
     def test_claim_handles_empty_success_output(self):
         result = SimpleNamespace(returncode=0, stdout="", stderr="")
-        with patch.object(self.store, "_run_node", return_value=result):
-            with self.assertRaises(NodeHelperError):
-                self.store.claim()
+        with patch.object(self.store, "_run_node", return_value=result), self.assertRaises(
+            NodeHelperError
+        ):
+            self.store.claim()
 
     def test_claim_returns_none_for_exhausted_queue(self):
         result = SimpleNamespace(returncode=3, stdout="", stderr="")
@@ -421,25 +502,44 @@ class TestStoreDeep(unittest.TestCase):
 
     def test_claim_reports_helper_failure(self):
         result = SimpleNamespace(returncode=2, stdout="", stderr="boom")
-        with patch.object(self.store, "_run_node", return_value=result):
-            with self.assertRaisesRegex(NodeHelperError, "boom"):
-                self.store.claim()
+        with patch.object(self.store, "_run_node", return_value=result), self.assertRaisesRegex(
+            NodeHelperError, "boom"
+        ):
+            self.store.claim()
 
     def test_mark_builds_all_optional_arguments(self):
         result = SimpleNamespace(returncode=0, stdout="", stderr="")
         with patch.object(self.store, "_run_node", return_value=result) as run:
             self.store.mark("/run/1", "solve", status="RUNNING", jobid="42", error="bad")
-        self.assertEqual(run.call_args.args[0], ["mark", "--run", "/run/1", "--stage", "solve", "--status", "RUNNING", "--jobid", "42", "--error", "bad"])
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                "mark",
+                "--run",
+                "/run/1",
+                "--stage",
+                "solve",
+                "--status",
+                "RUNNING",
+                "--jobid",
+                "42",
+                "--error",
+                "bad",
+            ],
+        )
 
     def test_mark_reports_failure(self):
         result = SimpleNamespace(returncode=1, stdout="", stderr="bad mark")
-        with patch.object(self.store, "_run_node", return_value=result):
-            with self.assertRaisesRegex(NodeHelperError, "bad mark"):
-                self.store.mark("/run", "s")
+        with patch.object(self.store, "_run_node", return_value=result), self.assertRaisesRegex(
+            NodeHelperError, "bad mark"
+        ):
+            self.store.mark("/run", "s")
 
     def test_event_logs_warning_on_helper_failure(self):
         result = SimpleNamespace(returncode=1, stdout="", stderr="event failed")
-        with patch.object(self.store, "_run_node", return_value=result), patch("jobchain.store.get_logger") as logger:
+        with patch.object(self.store, "_run_node", return_value=result), patch(
+            "jobchain.store.get_logger"
+        ) as logger:
             self.store.event("hello")
             logger.return_value.warning.assert_called_once()
 
@@ -459,102 +559,144 @@ class TestStoreDeep(unittest.TestCase):
         self.assertIsNone(_read_optional(os.path.join(self.tmp.name, "missing")))
 
     def test_run_terminal_and_jobid_missing_stage(self):
-        from jobchain.store import RunState, StageState, RowState
-        row = RowState("1", "1", 1, 0, {}, 1, runs=[RunState(1, stages=[StageState("prep", DONE, jobid="9")])])
+        from jobchain.store import RowState, RunState, StageState
+
+        row = RowState(
+            "1", "1", 1, 0, {}, 1, runs=[RunState(1, stages=[StageState("prep", DONE, jobid="9")])]
+        )
         self.assertTrue(row.is_terminal)
 
 
 class TestStoreRemaining(unittest.TestCase):
     def test_jobid_none_and_unmatched_stage(self):
-        r=row(runs=[]); self.assertIsNone(r.jobid)
-        r.runs=[RunState(generation=1,stages=[])]; self.assertIsNone(r.jobid)
+        r = row(runs=[])
+        self.assertIsNone(r.jobid)
+        r.runs = [RunState(generation=1, stages=[])]
+        self.assertIsNone(r.jobid)
 
     def test_node_binary_lazy_lookup(self):
-        store=Store("/tmp/jobchain-store-test")
-        with patch("jobchain.store.find_node_binary",return_value="/node") as find:
-            self.assertEqual(store.node_binary,"/node"); self.assertEqual(store.node_binary,"/node")
+        store = Store("/tmp/jobchain-store-test")
+        with patch("jobchain.store.find_node_binary", return_value="/node") as find:
+            self.assertEqual(store.node_binary, "/node")
+            self.assertEqual(store.node_binary, "/node")
         find.assert_called_once()
 
     def test_handoff_seed_deletes_existing_when_empty(self):
         with tempfile.TemporaryDirectory() as d:
-            store=Store(d); os.makedirs(store.row_dir("r"),exist_ok=True)
-            path=os.path.join(store.row_dir("r"),"handoff.seed")
-            open(path,"w").close()
-            store.seed_handoff("r",{})
+            store = Store(d)
+            os.makedirs(store.row_dir("r"), exist_ok=True)
+            path = os.path.join(store.row_dir("r"), "handoff.seed")
+            open(path, "w").close()
+            store.seed_handoff("r", {})
             self.assertFalse(os.path.exists(path))
 
     def test_load_row_skips_non_directory_run_entries(self):
         with tempfile.TemporaryDirectory() as d:
-            store=Store(d); rd=store.row_dir("r"); os.makedirs(rd,exist_ok=True)
-            with open(os.path.join(rd,"meta.json"),"w") as h:
+            store = Store(d)
+            rd = store.row_dir("r")
+            os.makedirs(rd, exist_ok=True)
+            with open(os.path.join(rd, "meta.json"), "w") as h:
                 h.write('{"name":"r","row_id":"r","line_num":1,"index":0,"params":{}}')
-            with open(os.path.join(rd,"gen"),"w") as h: h.write("1")
-            with open(os.path.join(rd,"run-1"),"w") as h: h.write("not a directory")
-            self.assertEqual(store.load_row("r").runs,[])
+            with open(os.path.join(rd, "gen"), "w") as h:
+                h.write("1")
+            with open(os.path.join(rd, "run-1"), "w") as h:
+                h.write("not a directory")
+            self.assertEqual(store.load_row("r").runs, [])
 
     def test_resolve_unique_duplicate_and_missing(self):
         with tempfile.TemporaryDirectory() as d:
-            store=Store(d)
-            rows=[row("001"),row("002")]
-            rows[0].params["x"]="same"; rows[1].params["x"]="same"
-            with self.assertRaises(StateError): store.resolve_row("x=same",["x"])
-            with self.assertRaises(StateError): store.resolve_row("x=none",["x"])
+            store = Store(d)
+            rows = [row("001"), row("002")]
+            rows[0].params["x"] = "same"
+            rows[1].params["x"] = "same"
+            with self.assertRaises(StateError):
+                store.resolve_row("x=same", ["x"])
+            with self.assertRaises(StateError):
+                store.resolve_row("x=none", ["x"])
 
     def test_resolve_padded_numeric_name(self):
         with tempfile.TemporaryDirectory() as d:
-            store=Store(d); r=row("000001")
-            with patch.object(store,"load_rows",return_value=[r]):
-                self.assertIs(store.resolve_row("1",[]),r)
+            store = Store(d)
+            r = row("000001")
+            with patch.object(store, "load_rows", return_value=[r]):
+                self.assertIs(store.resolve_row("1", []), r)
 
     def test_resolve_row_id_fallback_and_missing(self):
         with tempfile.TemporaryDirectory() as d:
-            store=Store(d); r=row("abc"); r.row_id="external"
-            with patch.object(store,"load_rows",return_value=[r]):
-                self.assertIs(store.resolve_row("external",[]),r)
-                with self.assertRaises(StateError): store.resolve_row("missing",[])
+            store = Store(d)
+            r = row("abc")
+            r.row_id = "external"
+            with patch.object(store, "load_rows", return_value=[r]):
+                self.assertIs(store.resolve_row("external", []), r)
+                with self.assertRaises(StateError):
+                    store.resolve_row("missing", [])
 
     def test_event_failure_only_warns(self):
-        store=Store("/tmp/x")
-        result=SimpleNamespace(returncode=1,stderr="bad",stdout="")
-        with patch.object(store,"_run_node",return_value=result),patch("jobchain.store.get_logger") as logger:
+        store = Store("/tmp/x")
+        result = SimpleNamespace(returncode=1, stderr="bad", stdout="")
+        with patch.object(store, "_run_node", return_value=result), patch(
+            "jobchain.store.get_logger"
+        ) as logger:
             store.event("x")
         logger.return_value.warning.assert_called_once()
 
     def test_write_text_without_parent_directory(self):
         with tempfile.TemporaryDirectory() as d:
-            old=os.getcwd(); os.chdir(d)
+            old = os.getcwd()
+            os.chdir(d)
             try:
-                _write_text("file.txt","hello")
-                with open("file.txt") as h: self.assertEqual(h.read(),"hello")
-            finally: os.chdir(old)
+                _write_text("file.txt", "hello")
+                with open("file.txt") as h:
+                    self.assertEqual(h.read(), "hello")
+            finally:
+                os.chdir(old)
 
     def test_row_state_terminal_and_stage_reached_paths(self):
-        r=row(runs=[RunState(generation=1,stages=[stage("a",PENDING),stage("b",PENDING)])])
-        self.assertEqual(r.stage_reached,"a")
-        r.runs=[RunState(generation=1,stages=[stage("a",CANCELLED),stage("b",PENDING)])]
-        self.assertEqual(r.stage_reached,"a")
+        r = row(runs=[RunState(generation=1, stages=[stage("a", PENDING), stage("b", PENDING)])])
+        self.assertEqual(r.stage_reached, "a")
+        r.runs = [RunState(generation=1, stages=[stage("a", CANCELLED), stage("b", PENDING)])]
+        self.assertEqual(r.stage_reached, "a")
         self.assertTrue(r.is_terminal)
 
     def test_find_node_binary_failure_is_propagated(self):
-        with patch("jobchain.store.find_node_binary",side_effect=StateError("missing")):
-            with self.assertRaises(StateError): Store("/tmp/x").node_binary
+        with patch(
+            "jobchain.store.find_node_binary", side_effect=StateError("missing")
+        ), self.assertRaises(StateError):
+            _ = Store("/tmp/x").node_binary
 
 
 class TestStoreFinalBranches(unittest.TestCase):
     def test_unique_column_duplicate_is_rejected(self):
         with tempfile.TemporaryDirectory() as d:
-            store=Store(d); a=row("001"); b=row("002"); a.params["x"]="same"; b.params["x"]="same"
-            with patch.object(store,"load_rows",return_value=[a,b]):
-                with self.assertRaises(StateError): store.resolve_row("x=same",["x"])
-
+            store = Store(d)
+            a = row("001")
+            b = row("002")
+            a.params["x"] = "same"
+            b.params["x"] = "same"
+            with patch.object(store, "load_rows", return_value=[a, b]), self.assertRaises(
+                StateError
+            ):
+                store.resolve_row("x=same", ["x"])
 
 
 # from test_low_coverage_gap_closure.py
 class TestStoreLastBranches(unittest.TestCase):
     def test_jobid_returns_none_when_reached_stage_has_no_matching_stage(self):
-        row = RowState("r", "id", 1, 0, {}, 1,
-                       runs=[SimpleNamespace(generation=1, stages=[SimpleNamespace(name="other", jobid="1")])])
-        with patch.object(type(row), "stage_reached", new_callable=unittest.mock.PropertyMock, return_value="missing"):
+        row = RowState(
+            "r",
+            "id",
+            1,
+            0,
+            {},
+            1,
+            runs=[SimpleNamespace(generation=1, stages=[SimpleNamespace(name="other", jobid="1")])],
+        )
+        with patch.object(
+            type(row),
+            "stage_reached",
+            new_callable=unittest.mock.PropertyMock,
+            return_value="missing",
+        ):
             self.assertIsNone(row.jobid)
 
     def test_resume_without_stop_marker_is_noop(self):
@@ -585,11 +727,15 @@ class TestStoreLastBranches(unittest.TestCase):
 
     def test_event_success_does_not_warn(self):
         result = SimpleNamespace(returncode=0, stderr="")
-        with tempfile.TemporaryDirectory() as d, patch.object(Store, "_run_node", return_value=result), patch("jobchain.store.get_logger") as logger:
+        with tempfile.TemporaryDirectory() as d, patch.object(
+            Store, "_run_node", return_value=result
+        ), patch("jobchain.store.get_logger") as logger:
             Store(d).event("hello")
         logger.return_value.warning.assert_not_called()
 
     def test_mark_success_does_not_raise(self):
         result = SimpleNamespace(returncode=0, stderr="")
-        with tempfile.TemporaryDirectory() as d, patch.object(Store, "_run_node", return_value=result):
+        with tempfile.TemporaryDirectory() as d, patch.object(
+            Store, "_run_node", return_value=result
+        ):
             Store(d).mark("run", "stage", status=DONE, jobid="7", error="")

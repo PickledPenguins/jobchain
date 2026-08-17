@@ -1,5 +1,6 @@
 from jobchain import JobStage
 
+
 class Produce(JobStage):
     def write_script(self, row, ctx):
         return ctx.write(f'''#!/bin/sh

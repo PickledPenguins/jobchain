@@ -112,7 +112,12 @@ else
 fi
 
 if command -v mypy >/dev/null 2>&1; then
-    mypy --ignore-missing-imports jobchain || STATUS=1
+    # --ignore-missing-imports alone no longer covers PyYAML: recent mypy
+    # split that case into its own import-untyped code, which fires even
+    # without network access to install types-PyYAML. Disabling the code
+    # is the offline-friendly fix; it does not weaken checking of jobchain's
+    # own modules, only of the untyped third-party import itself.
+    mypy --ignore-missing-imports --disable-error-code=import-untyped jobchain || STATUS=1
 else
     echo "Python: mypy not installed, skipping type check"
 fi

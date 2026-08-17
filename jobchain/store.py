@@ -599,11 +599,16 @@ class Store:
         return [self.load_row(name) for name in self.read_index()]
 
     def resolve_row(self, identifier: str,
-                    unique_fields: Optional[Sequence[str]] = None) -> RowState:
+                    unique_fields: Optional[Sequence[str]] = None,
+                    field_names: Optional[Sequence[str]] = None) -> RowState:
         """Find a row by state name, row number, source line, or a unique column.
 
         ``column=value`` is the form that needs no knowledge of jobchain's
         indexing: any column declared unique in the schema can name a row.
+        ``field_names`` is the schema's raw column order, used to look up a
+        column's value in a row that failed validation (which has no typed
+        ``params``, only ``raw_fields``); without it, such a row can only be
+        matched by its raw text position.
         """
         rows = self.load_rows()
 
@@ -615,8 +620,8 @@ class Store:
                     f"column '{column}' is not unique, so it cannot name a row; "
                     f"unique columns are {list(unique_fields) or 'none'}"
                 )
-            matches = [r for r in rows if _column_value(r, column, unique_fields)
-                       == wanted]
+            matches = [r for r in rows
+                       if _column_value(r, column, field_names) == wanted]
             if not matches:
                 raise StateError(f"no row has {column}={wanted}")
             if len(matches) > 1:
@@ -738,7 +743,7 @@ class Store:
 
 
 def _column_value(row: RowState, column: str,
-                  unique_fields: Optional[Sequence[str]]) -> str:
+                  field_names: Optional[Sequence[str]]) -> str:
     """A row's value for a column, falling back to its raw text.
 
     A row that failed validation has no typed parameters, but must still be
@@ -746,10 +751,13 @@ def _column_value(row: RowState, column: str,
     """
     if column in row.params:
         return str(row.params[column])
-    if row.raw_fields and unique_fields is not None:
-        # Positions are not known here, so match any raw field exactly. The
-        # caller has already checked the column is unique.
-        return ""
+    if row.raw_fields and field_names is not None:
+        try:
+            position = list(field_names).index(column)
+        except ValueError:
+            return ""
+        if position < len(row.raw_fields):
+            return row.raw_fields[position].strip()
     return ""
 
 

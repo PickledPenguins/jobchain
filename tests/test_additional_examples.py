@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import os
 import shutil
-import unittest
 from pathlib import Path
 
 from tests.helpers import TempProject
-
 
 EXAMPLES = [
     "16_schema_edges", "17_input_formats", "18_resource_precedence",

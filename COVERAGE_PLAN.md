@@ -181,15 +181,25 @@ Implemented:
 
 - `COVERAGE_PLAN.md` with category thresholds and staged work breakdown.
 - `tools/measure_coverage.py` with explicit category test lists.
-- Machine-readable JSON coverage reports under `coverage-reports/`.
 - Function coverage derived from coverage.py's per-function execution data.
 - Branch coverage from coverage.py's branch instrumentation.
 - Explicit reporting that condition and bounded-path metrics are not yet instrumented.
-- Initial focused operations-helper unit tests under `tests/unit/`.
 
-Initial unit baseline after the first operations-helper batch:
+**Status note (0.6):** the numbers below are the *initial* baseline from very
+early in this campaign (one operations-helper batch in, before the unit
+suite reached its current size) and are long since superseded; they are kept
+only as a historical starting point, not a current reading. They also
+predate a repository cleanup that removed `tests/unit/` (an early,
+duplicate-content test tree consolidated into today's `tests/test_*_unit.py`
+files) and stopped committing generated `coverage-reports/` JSON to git (see
+`CHANGELOG.md`'s `0.6` and hygiene-related entries). For the current,
+accurate numbers, run `./run_tests.sh` (its coverage section reports live
+line/branch percentages) or `python3 tools/measure_coverage.py unit`; do not
+treat the table below as current.
 
-| Metric | Current | Target |
+Initial unit baseline after the first operations-helper batch (historical, superseded — see note above):
+
+| Metric | Then | Target |
 |---|---:|---:|
 | Line | 72.43% | >=95% |
 | Statement | 76.09% | >=95% |
@@ -198,6 +208,8 @@ Initial unit baseline after the first operations-helper batch:
 | Condition | Not yet instrumented | >=90% |
 | Bounded path | Not yet implemented | >=80% |
 
-The unit tests themselves currently pass: 333 tests, 0 failures. The baseline demonstrates that substantial work remains, especially in `operations.py`, `cli.py`, and `store.py`. `cli.py` is intentionally not yet a primary unit target; its broad behavior will be covered in later Smoke/Integration/E2E phases, while pure argument parsing helpers can be added to the unit suite where appropriate.
-
-Next unit batch: close the uncovered `operations.py` function/branch inventory, followed by `store.py`, `parse.py`, `pipeline.py`, and schema-loading/error paths. Do not begin Smoke until the Unit gate is satisfied.
+That early snapshot passed 333 tests with 0 failures, and its own text noted
+"substantial work remains" -- true at the time, but the unit suite has grown
+substantially since (see `README.md`'s "Testing" section for the current
+overall test count). `cli.py` was intentionally not yet a primary unit
+target at that point; it has since gained its own `tests/test_cli_unit.py`.

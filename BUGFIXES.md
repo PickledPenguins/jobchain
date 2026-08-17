@@ -1,11 +1,3 @@
-## 4. Load testing category added
-
-A dedicated `load_tests/` category now exercises larger state sets and
-process contention with bounded, reproducible workloads. It covers a 5,000-row
-state load, a 2,000-row claim workload with 24 workers, and repeated medium
-loads to catch catastrophic performance regressions and throughput collapse.
-The tests are regression guards, not hardware-specific benchmarks.
-
 # Bug fixes made during example and test development
 
 Two defects were found in jobchain 0.5 while building end-to-end examples
@@ -323,6 +315,15 @@ marker must be removed deliberately.
 **Verification:** `tests.test_security` runs 21 tests with exactly 2 explicit
 expected failures, corresponding to the two currently known unsafe behaviors.
 No production security code was modified in this delivery.
+
+**Update (0.6):** the production behavior described above is now fixed.
+`command:` stages interpolate `{row.<column>}` as a `$JC_<column>` shell
+variable reference (`jobchain/config.py` `expand_template(..., shell=True)`,
+used by `RowContext.expand` in `jobchain/scheduler.py`) rather than
+substituting the row's raw value into the script text; the actual value
+reaches the script only through the row's already-quoted `env` file. Both
+`expectedFailure` markers have been removed and `tests.test_security` now
+runs all 21 tests with zero expected failures.
 
 ## 11. Test architecture now has explicit process-isolation and timeout controls
 

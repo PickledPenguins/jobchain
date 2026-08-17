@@ -5,12 +5,12 @@ Consolidated from test_core_unit.py and test_main_module.py.
 import io
 import logging
 import os
+import runpy
 import tempfile
 import unittest
-from contextlib import redirect_stderr
 from unittest.mock import patch
+
 from jobchain import core
-import runpy
 
 
 class TestCoreExceptions(unittest.TestCase):
@@ -136,9 +136,8 @@ class TestLogging(unittest.TestCase):
 
 class TestMainModule(unittest.TestCase):
     def test_module_entrypoint_calls_cli_main_and_exits_with_its_code(self):
-        with patch("jobchain.cli.main", return_value=7) as main:
-            with self.assertRaises(SystemExit) as caught:
-                runpy.run_module("jobchain.__main__", run_name="__main__")
+        with patch("jobchain.cli.main", return_value=7) as main, self.assertRaises(SystemExit) as caught:
+            runpy.run_module("jobchain.__main__", run_name="__main__")
         self.assertEqual(caught.exception.code,7)
         main.assert_called_once()
         import jobchain.__main__ as module

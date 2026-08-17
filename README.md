@@ -1,6 +1,6 @@
 # jobchain
 
-**Version 0.5-v4b**
+**Version 0.6**
 
 Run scheduler job pipelines from a delimited parameter file. Each row is one
 unit of work, and may be a single job or an ordered series of dependent jobs.
@@ -181,7 +181,7 @@ See [Architecture](#architecture) for what that costs.
 ## Project structure
 
 ```
-jobchain-0.5/
+jobchain-0.6/
 ├── README.md                   this document
 ├── DESIGN.md                   the architecture and the reasoning behind it
 ├── CHANGELOG.md                version history
@@ -676,7 +676,7 @@ Bare, it re-runs every stage for the selected rows at a new generation.
 ### `run`
 
 ```
-jobchain 0.5   run 'solver-production'
+jobchain 0.6   run 'solver-production'
 
   shape       pipeline
   config      /scratch/proj/solver.yaml
@@ -1533,18 +1533,14 @@ by default it is built with AddressSanitizer and UndefinedBehaviorSanitizer.
   sequential `rows.idx` discovery, hot claim contention, large-run reporting,
   scheduler backpressure, and increasing worker width.
 
-**464 tests, all passing. 88% branch coverage.**
-
-| Module | Coverage | Module | Coverage |
-|---|---|---|---|
-| `core.py` | 98% | `scheduler.py` | 91% |
-| `report.py` | 95% | `store.py` | 88% |
-| `config.py` | 92% | `operations.py` | 88% |
-| `pipeline.py` | 86% | `cli.py` | 87% |
-| `schema.py` | 86% | `parse.py` | 82% |
-
-`__main__.py` reads 0%: a two-line interpreter entry point that coverage
-cannot instrument.
+**1,321 tests in the core suite alone, all passing** (`tests/`, run via
+`unittest discover`), on top of the dedicated mutation, state/property,
+concurrency, fault-injection, load, and bottleneck categories above. Combined
+Python line coverage is 99.8%, branch coverage 99.7%; every `jobchain/`
+module reads 99% or 100%, `__main__.py` excepted (a two-line interpreter
+entry point that coverage cannot instrument). Run `./run_tests.sh` for the
+current numbers; they change as the suite grows, so treat any number here as
+a snapshot rather than a guarantee.
 
 ### What the suite guarantees
 
@@ -1622,10 +1618,16 @@ pass on the target cluster is worth doing before heavy use.
 - A submit-host poller for sites that forbid submission from compute nodes.
 - Per-stage retry policy.
 - An explicit `class:` override accepting a module path.
+- Structured output records, if handoff values ever need to be machine-read
+  rather than sourced.
 
 ## Changelog
 
 See `CHANGELOG.md` for the full history. Version 0.5 introduced multi-stage
 pipelines, run isolation, the single-file configuration, and reduced the
 command surface to eight commands. Builds `0.5-v1b` through `0.5-v4b` are
-bugfix builds on top of 0.5; see `BUGFIXES.md` for what changed.
+bugfix builds on top of 0.5; see `BUGFIXES.md` for what changed. The `0.5v3c`
+through `0.5v5c` builds added the state-property, concurrency, bottleneck,
+and fault-injection test categories described under "Testing philosophy" in
+`CLAUDE.md`. 0.6 unified the version identifiers those builds had scattered
+across the Python package, the C helper, and the shell helper.

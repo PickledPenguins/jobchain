@@ -401,6 +401,14 @@ done
 
 if [ "{inline}" = "1" ]; then
     touch "$STATE/running.$jobid"
+    # The subshell's own stdin/stdout/stderr are detached from this
+    # script's, not just the job script's (which already redirects to a
+    # log file below): a real scheduler client returns as soon as the
+    # submission is accepted, but a background `&` job that still holds
+    # this process's inherited pipes open keeps a caller reading them via
+    # a pipe (e.g. Python's subprocess.run(capture_output=True)) blocked
+    # until the job exits and closes them -- which looks exactly like a
+    # synchronous client, even though nothing here is actually waiting.
     (
         if [ -n "$dep_job" ]; then
             while [ -f "$STATE/running.$dep_job" ]; do sleep 0.05; done
@@ -427,7 +435,7 @@ if [ "{inline}" = "1" ]; then
         sh "$script" > "$STATE/job-$jobid.out" 2>&1
         echo $? > "$STATE/rc.$jobid"
         rm -f "$STATE/running.$jobid"
-    ) &
+    ) < /dev/null > /dev/null 2>&1 &
 fi
 
 if [ "{kind}" = "pbs" ]; then

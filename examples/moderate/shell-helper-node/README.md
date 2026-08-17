@@ -23,7 +23,7 @@ silently displaying another row's handoff value.
 ## Run it
 
 ```sh
-export JOBCHAIN_NODE=/path/to/jobchain-0.5/bin/jobchain-node.sh
+export JOBCHAIN_NODE=/path/to/jobchain-0.6/bin/jobchain-node.sh
 jobchain run config.yaml --check
 jobchain run config.yaml
 jobchain show --row task-a --full

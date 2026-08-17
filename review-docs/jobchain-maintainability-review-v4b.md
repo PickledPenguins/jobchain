@@ -1,5 +1,21 @@
 # jobchain 0.5-v4b — Extreme Maintainability & Extensibility Review
 
+**Triage note (0.6):** this review's 52 findings (M-01–M-52) have not been
+systematically triaged against the current codebase; treat each as
+unconfirmed until checked. Three have been spot-checked and addressed as of
+`0.6`:
+- **M-28** (version identity duplicated across the Python/C/shell layers) —
+  fixed; see `CHANGELOG.md`'s `0.6` entry.
+- **M-37** (checked-in `MagicMock/` directory of test-mock debris) — fixed;
+  the directory is deleted and its root cause (an unconfigured mock leaking
+  into `configure_logging`) closed in `tests/test_cli_unit.py`.
+- **M-40** (checked-in compiled `bin/jobchain-node` binary) — fixed;
+  untracked from git and added to `.gitignore`.
+
+The remaining findings (module/responsibility boundaries, scheduler
+abstraction, typed domain objects, and the rest) are unreviewed by this
+pass. This review otherwise stands as originally written below.
+
 ## Scope
 
 This review examines `jobchain-0.5-v4b.zip` specifically for fundamental software-engineering practices that affect whether a human can understand, maintain, debug, refactor, and extend the package safely.

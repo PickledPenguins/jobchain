@@ -6,8 +6,16 @@ import os
 import unittest
 
 from jobchain.schema import (
-    Bool, Comparison, Exact, Float, Int, OneOf, OutputPath, PathExists,
-    RequiredWhen, RowCount, Str, Unique, AnyOf, AllOf, Regex,
+    Bool,
+    Comparison,
+    Exact,
+    Float,
+    Int,
+    OneOf,
+    OutputPath,
+    RequiredWhen,
+    RowCount,
+    Unique,
 )
 from tests.helpers import TempProject
 
@@ -62,7 +70,7 @@ fields:
   - {name: file, type: path_exists, must_be_file: true}
   - {name: directory, type: path_exists, must_be_dir: true}
 """)
-        from jobchain.schema import load_schema, apply_base_dir
+        from jobchain.schema import apply_base_dir, load_schema
         schema = load_schema(schema_file)
         apply_base_dir(schema, self.tmp)
         file_validator = schema.fields[0].validators[0]

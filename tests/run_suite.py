@@ -80,7 +80,7 @@ def run_process(target: str, timeout: int, coverage: bool) -> tuple[int, str]:
     )
     try:
         output, _ = process.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired as exc:
+    except subprocess.TimeoutExpired:
         # Kill the complete process group. Tests intentionally use subprocesses
         # for schedulers and the node helper; killing only the Python parent
         # can otherwise leave children holding pipes or CPU indefinitely.

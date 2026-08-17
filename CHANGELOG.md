@@ -1,14 +1,95 @@
 # Changelog
 
+## 0.6 — version unification and a branch-wide cleanup pass
+
+- Collapsed the scattered `0.5`, `0.5-v4b`, `0.5v5c` version identifiers
+  (Python package, C helper, shell helper, README) to a single `0.6`,
+  closing the "version and protocol identity are duplicated" finding in
+  `review-docs/jobchain-maintainability-review-v4b.md`.
+
+### Fixed
+
+- Command injection: a `command:` stage's `{row.<column>}` placeholder is now
+  expanded as a `$JC_<column>` shell-variable reference (the value reaching
+  the script only through the row's already-quoted `env` file) instead of
+  having the raw row value substituted directly into the generated shell
+  text. See `BUGFIXES.md` item 10's "Update (0.6)".
+- `store.resolve_row("column=value", ...)` could never find a row that
+  failed schema validation: the lookup always returned `""` for such rows
+  regardless of the actual column value, so `jobchain show --row
+  column=value` on an invalid row raised "no row has column=value" even
+  when the row existed. It now locates the value by the column's position
+  in the schema's field order, the same way `operations._identifier_for`
+  already did.
+- The compiled node helper's `jc_submit_row` built its scheduler-submission
+  shell command by interpolating `home`/`row`/`run_dir`/`script` into
+  single-quoted `popen()` text without escaping embedded single quotes,
+  unlike the shell helper (which passes the same values as safe argv
+  words). A new `jc_shell_quote` closes the gap.
+- The shell node helper's directory/file creation (`mkdir`, `write_atomic`,
+  the claim marker, the handoff file, `events.log`) relied on the caller's
+  process umask, unlike the compiled helper's explicit `0755`/`0644`; under
+  a permissive umask (e.g. `000` or `002`, seen on some batch/service
+  accounts) this could leave run state group- or world-writable. The shell
+  helper now `chmod`s explicitly after each creation, matching the compiled
+  helper's permissions regardless of umask.
+- `tests/helpers.py`'s scheduler-stub `qsub`/`sbatch` backgrounded a
+  submitted job with `&` without detaching its own stdin/stdout/stderr, so
+  a caller reading the stub's output via a pipe (e.g. Python's
+  `subprocess.run(capture_output=True)`) blocked until the backgrounded job
+  finished — the opposite of the asynchronous behavior the stub exists to
+  simulate. `tests/test_scheduler_fixture.py`'s async-submission test was
+  silently measuring this every run; fixed by redirecting the background
+  subshell's stdio to `/dev/null`.
+- An unconfigured `MagicMock` passed as `store` through `cli.cmd_run` (in
+  two `tests/test_cli_unit.py` tests that didn't patch `configure_logging`)
+  caused `os.fspath()`'s mock fallback to produce a syntactically valid but
+  fake path (`MagicMock/store.log_path/<id>`), which
+  `jobchain/core.py`'s `configure_logging` then `os.makedirs`'d for real at
+  the repository root on every affected test run. 108 such files had
+  already been committed to git.
+
+### Repository hygiene
+
+- Deleted `tests/unit/`, an orphaned duplicate test tree (23 files, ~4,700
+  lines) superseded by `tests/test_*_unit.py` per the `0.5-v4b` entry above
+  but never removed; it was invisible to `run_tests.sh`/`Makefile` but
+  still linted, accounting for roughly 40% of the repository's ruff
+  warnings. `tools/measure_coverage.py`'s stale references to it were
+  updated to the current module names.
+- Deleted the committed `MagicMock/` debris (see above) and
+  `tools_measure_coverage.py`, an orphaned root-level duplicate of
+  `tools/measure_coverage.py`.
+- Untracked the compiled `bin/jobchain-node` binary and generated
+  `coverage-reports/`/`coverage-unit.json`; `.gitignore` now covers build
+  and coverage artifacts so they cannot be accidentally committed again.
+- `run_tests.sh`'s mypy invocation now also passes
+  `--disable-error-code=import-untyped`, needed because newer mypy no
+  longer treats PyYAML's missing stubs as covered by
+  `--ignore-missing-imports` alone.
+- Resolved the repository's ~1,050 ruff findings (mechanical reformatting
+  via `black` for compound one-line statements, verified AST-identical
+  before/after; the rest fixed individually, each verified against the
+  actual code path it tests) down to zero, and fixed the test-fixture bugs
+  a few of them were masking (an `assertRaises(Exception)` too broad to
+  notice a mock was missing a required attribute; two redundant imports of
+  the same exception class).
+- Fixed a missing-fixture bug that broke `tests.test_example_matrix`,
+  `tests.test_examples`, and `tests.test_integration_exhaustive` on a clean
+  checkout: `examples/02_validation/`, `examples/07_complex/`, and
+  `examples/08_validator_matrix/` reference `outputs/`/`results/`
+  directories that git does not track when empty and that were never
+  given a placeholder.
+
+All notable changes to jobchain are recorded here. Versions increment the
+lowest component.
+
 ## 0.5v5c — fault injection
 
 - Added the dedicated `fault_injection_tests/` category.
 - Added failure-injection coverage for atomic filesystem writes, scheduler submission/query failures, helper failures, malformed helper output, and corrupt state.
 - Atomic text/script writers now remove abandoned temporary files after write/rename failures while preserving the previous target on failed replacement.
 - Scheduler submission timeouts now become explicit `SchedulerError` failures instead of escaping as raw `TimeoutExpired`.
-
-All notable changes to jobchain are recorded here. Versions increment the
-lowest component.
 
 ## 0.5-v4b
 
@@ -224,6 +305,51 @@ Bugs found by the test suite while building this release:
 - The completion marker survived a rerun that finished quickly. It is now
   cleared the moment a row is re-queued.
 
+Alongside the `0.5-v1b` through `0.5-v4b` bugfix builds above, a separate
+track of releases added whole test categories rather than fixing defects.
+The exact interleaving between the two tracks is not reconstructable from
+this record; they are grouped here by track instead, newest first within
+each, and both precede the `0.6` version-identifier unification.
+
+## 0.5v7c
+
+- Added dedicated `bottleneck_tests` for architecture-specific scaling risks.
+- Added discovery-scan, claim-hotspot, reporting, scheduler-backpressure, and width-profile tests.
+- Added `make bottlenecks` and integrated the category into `run_tests.sh`.
+
+## 0.5v6c (inferred label — see note)
+
+A dedicated `load_tests/` category now exercises larger state sets and
+process contention with bounded, reproducible workloads: a 5,000-row state
+load, a 2,000-row claim workload with 24 workers, and repeated medium loads,
+to catch catastrophic performance regressions and throughput collapse. The
+tests are regression guards, not hardware-specific benchmarks. This entry
+was found misplaced in `BUGFIXES.md` (not itself a bug fix) with no version
+label of its own; `0.5v6c` is inferred from the otherwise-unexplained gap
+between `0.5v4c` and `0.5v7c` in this track's numbering, not confirmed.
+
+## 0.5v4c
+
+### Testing: Concurrency & Race Testing
+
+- Added `concurrency_tests/` as a dedicated testing category.
+- Added real multiprocessing contention tests for the Python claim wrapper.
+- Added setup-lock ownership tests proving one owner while the lock is held.
+- Added stop/claim quiescence testing and generation-isolation contention tests.
+- Integrated the category into `run_tests.sh` and `make concurrency`.
+
+## 0.5v3c
+
+- Added dedicated State & Property Testing category.
+- Added deterministic generated state/property checks and Make target.
+
+## Mutation testing category
+
+Added a dedicated `mutation_tests/` category with a dependency-free mutation
+runner. The initial 9 semantic mutants cover store state roll-ups, terminal
+state detection, operation force/continuation decisions, and scheduler result
+and timeout handling. Baseline mutation score: 9/9 killed (100%).
+
 ## 0.4
 
 Condensed the source layout: the C helper became one translation unit, and the
@@ -243,31 +369,3 @@ Reduced the command surface from sixteen commands to thirteen.
 First release: schema-driven validation, lock-free claiming, self-chaining
 execution for PBS Professional and Slurm, mid-run correction, and
 reconciliation.
-
-## Mutation testing category
-
-Added a dedicated `mutation_tests/` category with a dependency-free mutation
-runner. The initial 9 semantic mutants cover store state roll-ups, terminal
-state detection, operation force/continuation decisions, and scheduler result
-and timeout handling. Baseline mutation score: 9/9 killed (100%).
-
-## 0.5v3c
-
-- Added dedicated State & Property Testing category.
-- Added deterministic generated state/property checks and Make target.
-
-## 0.5v4c
-
-### Testing: Concurrency & Race Testing
-
-- Added `concurrency_tests/` as a dedicated testing category.
-- Added real multiprocessing contention tests for the Python claim wrapper.
-- Added setup-lock ownership tests proving one owner while the lock is held.
-- Added stop/claim quiescence testing and generation-isolation contention tests.
-- Integrated the category into `run_tests.sh` and `make concurrency`.
-
-## 0.5v7c
-
-- Added dedicated `bottleneck_tests` for architecture-specific scaling risks.
-- Added discovery-scan, claim-hotspot, reporting, scheduler-backpressure, and width-profile tests.
-- Added `make bottlenecks` and integrated the category into `run_tests.sh`.

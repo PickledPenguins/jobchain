@@ -1,8 +1,12 @@
 # jobchain — architecture and design
 
-**Version 0.5 (proposed)**
-**Status:** design complete, not yet implemented
-**Supersedes:** the single-job-per-row model of jobchain 0.4
+**Original design target: 0.5.** This document predates that release and is
+kept as the record of the design and its reasoning; it has not been updated
+for every change made since (see `CHANGELOG.md` for what actually shipped,
+up through the current 0.6). Where the two disagree, the code and
+`CHANGELOG.md` are authoritative.
+**Status:** implemented and shipped (0.5 through 0.6); superseded the
+single-job-per-row model of jobchain 0.4.
 
 ---
 
@@ -2358,7 +2362,7 @@ Python under `ruff` and `mypy`, both clean.
 
 ## Changelog
 
-### 0.5 (proposed)
+### 0.5
 
 - Multi-stage pipelines: one row produces N dependent jobs, chained by
   scheduler dependencies.

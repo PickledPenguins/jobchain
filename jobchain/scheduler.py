@@ -437,11 +437,17 @@ class RowContext:
         return "\n".join(lines)
 
     def expand(self, text: str, row: Dict[str, Any]) -> str:
-        """Expand row and run placeholders in arbitrary text."""
+        """Expand row and run placeholders in shell text (a `command:` stage).
+
+        A ``{row.<column>}`` reference expands to a ``$JC_<column>`` shell
+        variable, not the value itself -- see ``expand_template``'s
+        ``shell=True`` docstring for why that is what keeps row data from
+        being able to inject shell syntax.
+        """
         from .config import expand_template
         return expand_template(text, self.run.name, self.run.home, row=row,
                                row_name=self.row_name, row_index=self.row_index,
-                               generation=self.generation)
+                               generation=self.generation, shell=True)
 
     def write(self, text: str) -> str:
         """Write the script, make it executable, and return its path."""

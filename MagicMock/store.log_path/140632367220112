@@ -1,6 +1,0 @@
-2026-08-15 03:25:59,491 DEBUG   scan complete: 1 row(s), 1 valid, 0 invalid, 0 file-level failure(s)
-2026-08-15 03:25:59,495 DEBUG   stripped a UTF-8 byte-order mark from /tmp/tmpn3iaurz2
-2026-08-15 03:25:59,495 DEBUG   normalized /tmp/tmpn3iaurz2: 1 rows, 1 changed, 0 blank, 0 comment, expecting 1 fields
-2026-08-15 03:25:59,496 DEBUG   normalized /tmp/tmping2n0fy: 1 rows, 0 changed, 0 blank, 0 comment, expecting 2 fields
-2026-08-15 03:25:59,498 DEBUG   scan complete: 1 row(s), 0 valid, 1 invalid, 0 file-level failure(s)
-2026-08-15 03:25:59,498 DEBUG   scan complete: 2 row(s), 0 valid, 2 invalid, 0 file-level failure(s)

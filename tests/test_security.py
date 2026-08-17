@@ -25,15 +25,17 @@ from tests.helpers import NODE_BINARY, TempProject, require_node_binary
 
 
 class TestCommandTemplateInjection(TempProject):
-    """`command:` stages interpolate {row.<column>} directly into shell
-    text with no escaping (jobchain/pipeline.py CommandStage.write_script
-    calls ctx.expand, which is plain string substitution). This is by
-    design -- a command: template IS shell code, the same way an f-string
-    passed to os.system would be -- but it means a row value containing
-    shell metacharacters becomes live shell syntax in the generated
-    script if the template itself does not defend against that. These
-    tests document the actual behavior precisely, rather than assuming a
-    template author already knows to quote every {row.*} reference.
+    """`command:` stages interpolate {row.<column>} into shell text as a
+    `$JC_<column>` variable reference, not the value itself (jobchain/
+    config.py expand_template, shell=True, called from scheduler.py
+    RowContext.expand). The actual value reaches the script only through
+    the row's env file, written by store.render_env with proper shell
+    quoting and sourced by ctx.preamble() before the command body runs.
+    Because the shell parses command structure before it expands a
+    variable, nothing embedded in the value -- unbalanced quotes, `;`,
+    `&&`, backticks -- can introduce new shell syntax merely by being
+    substituted into a template, regardless of whether the template
+    itself quotes the placeholder.
     """
 
     def _project(self, command: str, value: str) -> None:
@@ -54,12 +56,9 @@ pipeline:
       command: '{command}'
 """)
 
-    @unittest.expectedFailure
     def test_an_unquoted_placeholder_must_not_let_row_data_run_as_shell_code(self):
-        # This is a security requirement, not a passing regression: row data
-        # must never become executable shell syntax merely because a template
-        # author omitted quoting. The test is currently an expected failure
-        # because the shipped implementation still permits this behavior.
+        # Row data must never become executable shell syntax merely because
+        # a template author omitted quoting.
         marker = self.path("injected.marker")
         self._project("touch {run_marker} && true # {row.payload}"
                        .replace("{run_marker}", marker),
@@ -71,7 +70,8 @@ pipeline:
                             "01-only.sh")
         content = self.read(script)
         # The generated script must not contain the row value as live shell
-        # syntax. A future safe implementation should quote/escape it.
+        # syntax: it is referenced as $JC_payload, with the actual value
+        # only in the separately-sourced, quoted env file.
         self.assertNotIn(f"touch {marker}INJECTED #", content)
 
     def test_double_quoting_the_placeholder_contains_the_value(self):
@@ -92,13 +92,9 @@ pipeline:
             os.path.isfile("/tmp/should-not-exist-security-test"))
         self.assertIn("hello; touch", self.read(out))
 
-    @unittest.expectedFailure
     def test_an_embedded_double_quote_must_not_break_out_of_double_quoting(self):
-        # This is a security requirement: even a quoted row placeholder must
-        # remain inert when the value itself contains shell metacharacters.
-        # It is currently an expected failure until row-value escaping is
-        # implemented. An unexpected success will fail the test suite so the
-        # expected-failure marker can then be removed deliberately.
+        # Even a quoted row placeholder must remain inert when the value
+        # itself contains shell metacharacters, including a double quote.
         out = self.path("out.txt")
         marker = self.path("broke-out.marker")
         self._project(f'echo "value: {{row.payload}}" > {out}',

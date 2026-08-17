@@ -6,7 +6,6 @@ import os
 import unittest
 
 from jobchain.schema import Bool, Float, Int, OneOf, Regex, Str
-
 from tests.helpers import TempProject
 
 

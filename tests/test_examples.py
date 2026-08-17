@@ -124,7 +124,7 @@ class TestExamplePipelines(ExampleCase):
         self.install_scheduler()
         self.run_example("pipeline")
         self.wait_for_jobs()
-        self.assertEqual(set(row.status for row in self.store_for_example("pipeline").load_rows()), {"DONE"})
+        self.assertEqual({row.status for row in self.store_for_example("pipeline").load_rows()}, {"DONE"})
         self.assertEqual(len(self.submissions()), 9)
 
     def test_pipeline_generated_scripts_contain_row_resources_and_handoff(self):
@@ -179,7 +179,7 @@ class TestExamplePipelines(ExampleCase):
         config = self.path("examples", "07_complex", "config.yaml")
         self.run_cli("run", config, expect=0, cwd=os.path.dirname(config))
         self.wait_for_jobs()
-        self.assertEqual(set(row.status for row in self.store_for_example("complex").load_rows()), {"DONE"})
+        self.assertEqual({row.status for row in self.store_for_example("complex").load_rows()}, {"DONE"})
         for case in ("cpu-small", "gpu-small", "cpu-large"):
             row = self.store_for_example("complex").resolve_row(case)
             self.assertTrue(os.path.isfile(os.path.join(row.params["output_dir"], "result.dat")))

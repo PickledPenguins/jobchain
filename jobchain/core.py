@@ -17,7 +17,7 @@ import sys
 from typing import Optional
 
 #: Semantic version of the whole project (Python package and C helper).
-VERSION = "0.5-v4b"
+VERSION = "0.6"
 
 # ---------------------------------------------------------------------------
 # Exit codes

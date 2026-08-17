@@ -5,15 +5,20 @@ matching this project's one-file-per-subsystem convention.
 """
 from __future__ import annotations
 
-import textwrap
 import unittest
-from jobchain.core import PipelineError
+
+from jobchain.core import PipelineError, SchemaError
 from jobchain.pipeline import (
-    Bool, Choice, Integer, JobStage, Setting, Text, describe_pipeline,
+    Bool,
+    Choice,
+    Integer,
+    JobStage,
+    Setting,
+    Text,
+    describe_pipeline,
     load_pipeline_source,
 )
 from tests.helpers import TempProject
-from jobchain.pipeline import JobStage
 
 
 # from test_pipeline_deep.py
@@ -43,7 +48,6 @@ class _Ctx:
 # from test_pipeline_deep.py
 class PipelineDeepCase(TempProject):
     def build(self, document, construct=True):
-        from jobchain.pipeline import load_pipeline_source
         pipeline = load_pipeline_source(document, self.tmp)
         if construct:
             pipeline.construct(object())
@@ -128,7 +132,7 @@ class TestPipelineLoadingBranches(PipelineDeepCase):
         self.assertEqual(p.chaining_stage, "a")
 
     def test_stage_module_import_failure_is_propagated(self):
-        with self.assertRaises(Exception):
+        with self.assertRaises(SchemaError):
             self.build({"stage_module": "missing_module.py",
                         "stages": [{"name": "a"}]})
 

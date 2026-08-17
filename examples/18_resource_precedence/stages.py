@@ -1,5 +1,6 @@
 from jobchain import JobStage
 
+
 class Compute(JobStage):
     def resources(self, row):
         return {

@@ -9,7 +9,6 @@ submission path.
 from __future__ import annotations
 
 import os
-import shutil
 import stat
 import subprocess
 import sys
@@ -45,8 +44,7 @@ def _make_home(root: str, rows: int, blocked: int = 0, stages: int = 1) -> str:
         with open(os.path.join(row, "env"), "w", encoding="utf-8") as f:
             f.write(f"JC_index='{index}'\nexport JC_index\n")
         with open(os.path.join(row, "manifest"), "w", encoding="utf-8") as f:
-            for stage in range(stages):
-                f.write(f"stage{stage + 1}\t-\t/bin/true\n")
+            f.writelines(f"stage{stage + 1}\t-\t/bin/true\n" for stage in range(stages))
         names.append(name)
     # A run directory makes the current generation unavailable to claim().
     for index in range(blocked):
@@ -160,7 +158,7 @@ def test_scheduler_backpressure_does_not_leak_processes() -> None:
             assert result.returncode == 0, result.stderr
         elapsed = time.monotonic() - start
         assert elapsed < 10
-        leftovers = [p for p in Path(home).rglob("*.tmp.*")]
+        leftovers = list(Path(home).rglob("*.tmp.*"))
         assert not leftovers, f"temporary files leaked: {leftovers[:5]}"
         print(f"  scheduler backpressure: 8x2 submissions in {elapsed:.3f}s")
 

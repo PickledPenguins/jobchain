@@ -12,8 +12,13 @@ import os
 import time
 import unittest
 
-from tests.helpers import (NODE_BINARY, PIPELINE_CONFIG, STAGES_MODULE,
-                           TempProject, require_node_binary)
+from tests.helpers import (
+    NODE_BINARY,
+    PIPELINE_CONFIG,
+    STAGES_MODULE,
+    TempProject,
+    require_node_binary,
+)
 
 BOOM_PARAMS = """\
 rid|count|label

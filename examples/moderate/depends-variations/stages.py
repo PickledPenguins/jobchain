@@ -31,8 +31,10 @@ class Solve(JobStage):
     """Fails on purpose for rows marked should_fail=yes."""
 
     def write_script(self, row, ctx):
-        work = "exit 1" if row["should_fail"] == "yes" else "echo solved > " \
-            f'"{ctx.work_dir}/solved.txt"'
+        work = (
+            "exit 1" if row["should_fail"] == "yes"
+            else f'echo solved > "{ctx.work_dir}/solved.txt"'
+        )
         return ctx.write(f"""#!/bin/sh
 {ctx.directives(self.effective_resources(row))}
 {ctx.preamble()}

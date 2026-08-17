@@ -275,12 +275,22 @@ def _resolve(path: str, base_dir: str) -> str:
 def expand_template(template: str, run_name: str, run_home: str,
                     row: Optional[Dict[str, Any]] = None,
                     row_name: str = "", row_index: int = 0,
-                    generation: int = 1) -> str:
+                    generation: int = 1, shell: bool = False) -> str:
     """Expand a path template against a run and, optionally, a row.
 
     Unknown placeholders are an error rather than being left in place: a path
     containing a literal brace almost always means a typo, and discovering
     that when a job fails to write is far worse than discovering it now.
+
+    ``shell=True`` is for a template that becomes shell text (a `command:`
+    stage), not a path: a ``{row.<column>}`` reference then expands to a
+    ``$JC_<column>`` shell-variable reference instead of the value itself.
+    The value reaches the script only through the row's already-quoted
+    ``env`` file (see ``store.render_env``), sourced before the command
+    runs, so row data can never inject shell syntax merely by being
+    substituted into a template -- the shell parses command structure
+    before it expands a variable, so nothing embedded in the value can
+    introduce a new command, regardless of quoting in the template.
     """
     row = row or {}
 
@@ -307,7 +317,7 @@ def expand_template(template: str, run_name: str, run_home: str,
             if key == "generation":
                 return str(generation)
             if key in row:
-                return str(row[key])
+                return f"$JC_{key}" if shell else str(row[key])
             raise ConfigError(
                 f"template placeholder {{row.{key}}} names no column; "
                 f"available columns are {sorted(row)}"

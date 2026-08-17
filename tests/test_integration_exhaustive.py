@@ -4,11 +4,10 @@ These tests intentionally exercise complete component boundaries.  They avoid
 long scheduler runs where a no-submit or single-row variant can validate the
 same integration contract.
 """
+
 from __future__ import annotations
 
-import json
 import os
-import time
 import unittest
 
 from tests.helpers import TempProject, require_node_binary
@@ -144,7 +143,11 @@ class TestSchemaParseIntegration(TempProject):
 
     def test_quoted_delimiter_survives_parser_to_store(self):
         self.make_project(width=1)
-        config = self.read(self.path("config.yaml")).replace("delimiter: pipe", "delimiter: comma").replace("id_field: rid", "id_field: rid, quoting: true")
+        config = (
+            self.read(self.path("config.yaml"))
+            .replace("delimiter: pipe", "delimiter: comma")
+            .replace("id_field: rid", "id_field: rid, quoting: true")
+        )
         self.write("config.yaml", config)
         self.write("params.psv", 'rid,count,label\na1,5,"hello,world"\n')
         self.install_scheduler(run_inline=False)
@@ -270,16 +273,20 @@ class TestFilesystemIntegration(TempProject):
 if __name__ == "__main__":
     unittest.main()
 
+
 class TestDocumentedExampleIntegration(TempProject):
     """Run the broad positive example corpus through the real integration path."""
 
     def _example(self, number: int, scheduler: str = "pbs") -> None:
         import shutil
-        source = self.path("..", "examples", f"{number:02d}_*")
+
+        self.path("..", "examples", f"{number:02d}_*")
         # The repository examples live beside the tests; resolve the wildcard
         # without relying on the shell so the test remains portable.
         repo_examples = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "examples"))
-        candidates = [name for name in os.listdir(repo_examples) if name.startswith(f"{number:02d}_")]
+        candidates = [
+            name for name in os.listdir(repo_examples) if name.startswith(f"{number:02d}_")
+        ]
         self.assertEqual(len(candidates), 1)
         src = os.path.join(repo_examples, candidates[0])
         for name in os.listdir(src):
@@ -295,47 +302,96 @@ class TestDocumentedExampleIntegration(TempProject):
             self.write("config.yaml", config)
         self.install_scheduler(kind=scheduler, run_inline=False)
         self.run_cli("run", "config.yaml", "--no-submit", expect=0)
-        self.assertTrue(os.path.isfile(self.path(".jobchain", self._run_name_from_config(), "rows.idx")))
+        self.assertTrue(
+            os.path.isfile(self.path(".jobchain", self._run_name_from_config(), "rows.idx"))
+        )
 
     def _run_name_from_config(self) -> str:
         import re
+
         match = re.search(r"^name:\s*([^\n]+)", self.read(self.path("config.yaml")), re.MULTILINE)
         self.assertIsNotNone(match)
-        value = match.group(1).strip().strip('"\'')
+        value = match.group(1).strip().strip("\"'")
         # Dynamic names are resolved by the application; inspect the actual run directory.
         if "{" in value:
-            runs = [x for x in os.listdir(self.path(".jobchain")) if os.path.isdir(self.path(".jobchain", x))]
+            runs = [
+                x
+                for x in os.listdir(self.path(".jobchain"))
+                if os.path.isdir(self.path(".jobchain", x))
+            ]
             self.assertEqual(len(runs), 1)
             return runs[0]
         return value
 
-    def test_16_schema_edges(self): self._example(16)
-    def test_17_input_formats(self): self._example(17)
-    def test_18_resource_precedence(self): self._example(18)
-    def test_19_stage_settings(self): self._example(19)
-    def test_20_handoff_generations(self): self._example(20)
-    def test_21_scheduler_equivalence_pbs(self): self._example(21, "pbs")
-    def test_21_scheduler_equivalence_slurm(self): self._example(21, "slurm")
-    def test_22_multirun_isolation(self): self._example(22)
-    def test_23_comments_and_empty_rows(self): self._example(23)
-    def test_24_max_in_flight(self): self._example(24)
-    def test_25_quoted_csv(self): self._example(25)
-    def test_26_tab_delimiter(self): self._example(26)
-    def test_27_literal_delimiter(self): self._example(27)
-    def test_28_header_warning(self): self._example(28)
-    def test_29_optional_defaults(self): self._example(29)
-    def test_30_output_paths(self): self._example(30)
-    def test_31_env_and_directives(self): self._example(31)
-    def test_32_single_stage(self): self._example(32)
-    def test_33_long_pipeline(self): self._example(33)
-    def test_34_afternotok(self): self._example(34)
-    def test_35_multi_delimiter_values(self): self._example(35)
+    def test_16_schema_edges(self):
+        self._example(16)
+
+    def test_17_input_formats(self):
+        self._example(17)
+
+    def test_18_resource_precedence(self):
+        self._example(18)
+
+    def test_19_stage_settings(self):
+        self._example(19)
+
+    def test_20_handoff_generations(self):
+        self._example(20)
+
+    def test_21_scheduler_equivalence_pbs(self):
+        self._example(21, "pbs")
+
+    def test_21_scheduler_equivalence_slurm(self):
+        self._example(21, "slurm")
+
+    def test_22_multirun_isolation(self):
+        self._example(22)
+
+    def test_23_comments_and_empty_rows(self):
+        self._example(23)
+
+    def test_24_max_in_flight(self):
+        self._example(24)
+
+    def test_25_quoted_csv(self):
+        self._example(25)
+
+    def test_26_tab_delimiter(self):
+        self._example(26)
+
+    def test_27_literal_delimiter(self):
+        self._example(27)
+
+    def test_28_header_warning(self):
+        self._example(28)
+
+    def test_29_optional_defaults(self):
+        self._example(29)
+
+    def test_30_output_paths(self):
+        self._example(30)
+
+    def test_31_env_and_directives(self):
+        self._example(31)
+
+    def test_32_single_stage(self):
+        self._example(32)
+
+    def test_33_long_pipeline(self):
+        self._example(33)
+
+    def test_34_afternotok(self):
+        self._example(34)
+
+    def test_35_multi_delimiter_values(self):
+        self._example(35)
+
 
 class TestSchemaValidatorIntegration(TempProject):
     """Exercise schema validators through config loading and real scanning."""
 
     def _check(self, field_spec: str, value: str, *, extra_schema: str = "", expect: int = 0):
-        config = f'''name: validator-integration
+        config = f"""name: validator-integration
 params: params.psv
 scheduler: pbs
 schema:
@@ -347,21 +403,43 @@ schema:
   name: single
   stages:
     - {{name: work, command: "true"}}
-'''
+"""
         self.make_project(width=1, config=config, params=f"value\n{value}\n")
         self.install_scheduler(run_inline=False)
         return self.run_cli("run", "config.yaml", "--check", expect=expect)
 
-    def test_int_validator(self): self._check("type: int, min: 1, max: 10", "5")
-    def test_float_validator(self): self._check("type: float, min: 0.5, max: 2.5", "1.25")
-    def test_string_length_validator(self): self._check("type: str, min_length: 2, max_length: 8", "hello")
-    def test_bool_validator(self): self._check("type: bool", "true")
-    def test_one_of_validator(self): self._check("type: one_of, values: [red, green]", "green")
-    def test_exact_validator(self): self._check("type: exact, value: READY", "READY")
-    def test_regex_validator(self): self._check('type: regex, pattern: "^[A-Z]{3}$"', "ABC")
-    def test_optional_validator(self): self._check("type: str, optional: true", "")
-    def test_all_of_validator(self): self._check("type: all_of, of: [{type: str, min_length: 2}, {type: regex, pattern: '^[a-z]+$'}]", "abc")
-    def test_any_of_validator(self): self._check("type: any_of, of: [{type: exact, value: A}, {type: exact, value: B}]", "B")
+    def test_int_validator(self):
+        self._check("type: int, min: 1, max: 10", "5")
+
+    def test_float_validator(self):
+        self._check("type: float, min: 0.5, max: 2.5", "1.25")
+
+    def test_string_length_validator(self):
+        self._check("type: str, min_length: 2, max_length: 8", "hello")
+
+    def test_bool_validator(self):
+        self._check("type: bool", "true")
+
+    def test_one_of_validator(self):
+        self._check("type: one_of, values: [red, green]", "green")
+
+    def test_exact_validator(self):
+        self._check("type: exact, value: READY", "READY")
+
+    def test_regex_validator(self):
+        self._check('type: regex, pattern: "^[A-Z]{3}$"', "ABC")
+
+    def test_optional_validator(self):
+        self._check("type: str, optional: true", "")
+
+    def test_all_of_validator(self):
+        self._check(
+            "type: all_of, of: [{type: str, min_length: 2}, {type: regex, pattern: '^[a-z]+$'}]",
+            "abc",
+        )
+
+    def test_any_of_validator(self):
+        self._check("type: any_of, of: [{type: exact, value: A}, {type: exact, value: B}]", "B")
 
     def test_invalid_int_reaches_scan_result(self):
         result = self._check("type: int, min: 1, max: 10", "bad", expect=3)
@@ -372,7 +450,7 @@ schema:
         self.assertIn("invalid", result.stdout.lower())
 
     def test_required_when_row_validator(self):
-        config = '''name: required-when
+        config = """name: required-when
 params: params.psv
 scheduler: pbs
 schema:
@@ -387,12 +465,12 @@ schema:
 pipeline:
   name: single
   stages: [{name: work, command: "true"}]
-'''
+"""
         self.make_project(width=1, config=config, params="id|kind|detail\na1|special|\n")
         self.run_cli("run", "config.yaml", "--check", expect=3)
 
     def test_comparison_row_validator(self):
-        config = '''name: comparison
+        config = """name: comparison
 params: params.psv
 scheduler: pbs
 schema:
@@ -407,12 +485,12 @@ schema:
 pipeline:
   name: single
   stages: [{name: work, command: "true"}]
-'''
+"""
         self.make_project(width=1, config=config, params="id|low|high\na1|5|4\n")
         self.run_cli("run", "config.yaml", "--check", expect=3)
 
     def test_unique_file_validator(self):
-        config = '''name: unique
+        config = """name: unique
 params: params.psv
 scheduler: pbs
 schema:
@@ -425,12 +503,12 @@ schema:
 pipeline:
   name: single
   stages: [{name: work, command: "true"}]
-'''
+"""
         self.make_project(width=1, config=config, params="id\na1\na1\n")
         self.run_cli("run", "config.yaml", "--check", expect=3)
 
     def test_row_count_file_validator(self):
-        config = '''name: row-count
+        config = """name: row-count
 params: params.psv
 scheduler: pbs
 schema:
@@ -443,7 +521,7 @@ schema:
 pipeline:
   name: single
   stages: [{name: work, command: "true"}]
-'''
+"""
         self.make_project(width=1, config=config, params="id\na1\n")
         self.run_cli("run", "config.yaml", "--check", expect=3)
 
@@ -483,7 +561,10 @@ class TestReportingIntegration(TempProject):
 
     def test_show_output(self):
         row = self.store_for().resolve_row("a1")
-        self.write(os.path.join(".jobchain", "test-run", "logs", row.name, "archive.log"), "scheduler output\n")
+        self.write(
+            os.path.join(".jobchain", "test-run", "logs", row.name, "archive.log"),
+            "scheduler output\n",
+        )
         result = self.run_cli("show", "--row", "a1", "--output", expect=0)
         self.assertIn("scheduler output", result.stdout)
 
@@ -549,6 +630,7 @@ class TestSchedulerBackendIntegration(TempProject):
         self.run_cli("run", "config.yaml", expect=0)
         self.run_cli("cancel", "--row", "a1", expect=0)
         self.assertTrue(self.cancelled_jobs())
+
 
 class TestCommandOptionIntegration(TempProject):
     def setUp(self):
@@ -663,13 +745,17 @@ class TestCommandOptionIntegration(TempProject):
         result = self.run_cli("status", "--dry-run", expect=0)
         self.assertIsInstance(result.stdout, str)
 
+
 class TestCoreExampleIntegration(TempProject):
     """Exercise the first, core example families through the real CLI."""
 
     def _copy_example(self, number: int):
         import shutil
+
         repo_examples = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "examples"))
-        candidates = [name for name in os.listdir(repo_examples) if name.startswith(f"{number:02d}_")]
+        candidates = [
+            name for name in os.listdir(repo_examples) if name.startswith(f"{number:02d}_")
+        ]
         self.assertEqual(len(candidates), 1)
         src = os.path.join(repo_examples, candidates[0])
         for name in os.listdir(src):
@@ -683,27 +769,55 @@ class TestCoreExampleIntegration(TempProject):
         self.run_cli("run", "config.yaml", "--no-submit", expect=0)
         self.assertTrue(os.path.isdir(self.path(".jobchain")))
 
-    def test_01_basic(self): self._copy_example(1)
-    def test_02_validation(self): self._copy_example(2)
-    def test_03_pipeline(self): self._copy_example(3)
-    def test_04_dynamic_resources(self): self._copy_example(4)
-    def test_05_failure_recovery(self): self._copy_example(5)
-    def test_06_formats(self): self._copy_example(6)
-    def test_07_complex(self): self._copy_example(7)
-    def test_08_validator_matrix(self): self._copy_example(8)
-    def test_09_pipeline_matrix(self): self._copy_example(9)
-    def test_13_operations(self): self._copy_example(13)
-    def test_14_scheduler_reconciliation(self): self._copy_example(14)
-    def test_15_concurrency(self): self._copy_example(15)
+    def test_01_basic(self):
+        self._copy_example(1)
+
+    def test_02_validation(self):
+        self._copy_example(2)
+
+    def test_03_pipeline(self):
+        self._copy_example(3)
+
+    def test_04_dynamic_resources(self):
+        self._copy_example(4)
+
+    def test_05_failure_recovery(self):
+        self._copy_example(5)
+
+    def test_06_formats(self):
+        self._copy_example(6)
+
+    def test_07_complex(self):
+        self._copy_example(7)
+
+    def test_08_validator_matrix(self):
+        self._copy_example(8)
+
+    def test_09_pipeline_matrix(self):
+        self._copy_example(9)
+
+    def test_13_operations(self):
+        self._copy_example(13)
+
+    def test_14_scheduler_reconciliation(self):
+        self._copy_example(14)
+
+    def test_15_concurrency(self):
+        self._copy_example(15)
 
     def test_complex_pipeline_executes_end_to_end(self):
         import shutil
-        repo = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "examples", "07_complex"))
+
+        repo = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "examples", "07_complex")
+        )
         for name in os.listdir(repo):
             source = os.path.join(repo, name)
             target = self.path(name)
-            if os.path.isdir(source): shutil.copytree(source, target)
-            else: shutil.copy2(source, target)
+            if os.path.isdir(source):
+                shutil.copytree(source, target)
+            else:
+                shutil.copy2(source, target)
         self.install_scheduler()
         self.run_cli("run", "config.yaml", expect=0)
         self.wait_for_jobs()
@@ -712,12 +826,17 @@ class TestCoreExampleIntegration(TempProject):
 
     def test_failure_recovery_example_executes(self):
         import shutil
-        repo = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "examples", "05_failure_recovery"))
+
+        repo = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "examples", "05_failure_recovery")
+        )
         for name in os.listdir(repo):
             source = os.path.join(repo, name)
             target = self.path(name)
-            if os.path.isdir(source): shutil.copytree(source, target)
-            else: shutil.copy2(source, target)
+            if os.path.isdir(source):
+                shutil.copytree(source, target)
+            else:
+                shutil.copy2(source, target)
         self.install_scheduler()
         self.run_cli("run", "config.yaml", expect=0)
         self.wait_for_jobs()
@@ -726,21 +845,27 @@ class TestCoreExampleIntegration(TempProject):
 
     def test_concurrency_example_can_prepare_repeatedly(self):
         import shutil
-        repo = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "examples", "15_concurrency"))
+
+        repo = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "examples", "15_concurrency")
+        )
         for name in os.listdir(repo):
             source = os.path.join(repo, name)
             target = self.path(name)
-            if os.path.isdir(source): shutil.copytree(source, target)
-            else: shutil.copy2(source, target)
+            if os.path.isdir(source):
+                shutil.copytree(source, target)
+            else:
+                shutil.copy2(source, target)
         self.install_scheduler(run_inline=False)
         self.run_cli("run", "config.yaml", "--no-submit", expect=0)
         self.run_cli("run", "config.yaml", "--no-submit", expect=0)
         self.assertTrue(os.path.exists(self.path(".jobchain")))
 
+
 class TestSchemaConfigurationFailureIntegration(TempProject):
     """Malformed configurations must fail through the complete CLI stack."""
 
-    BASE = '''name: bad-config
+    BASE = """name: bad-config
 params: params.psv
 scheduler: pbs
 schema:
@@ -751,7 +876,7 @@ schema:
 pipeline:
   name: single
   stages: [{name: work, command: "true"}]
-'''
+"""
 
     def _run_bad(self, config: str, *, expect: int = 5):
         self.make_project(width=1, config=config, params="id\na1\n")
@@ -802,13 +927,13 @@ pipeline:
         self._run_bad(config)
 
     def test_invalid_pipeline_root(self):
-        self._run_bad(self.BASE.replace("stages: [{name: work, command: \"true\"}]", "stages: bad"))
+        self._run_bad(self.BASE.replace('stages: [{name: work, command: "true"}]', "stages: bad"))
 
     def test_pipeline_stage_missing_name(self):
-        self._run_bad(self.BASE.replace("{name: work, command: \"true\"}", "{command: \"true\"}"))
+        self._run_bad(self.BASE.replace('{name: work, command: "true"}', '{command: "true"}'))
 
     def test_pipeline_stage_missing_command(self):
-        self._run_bad(self.BASE.replace("{name: work, command: \"true\"}", "{name: work}"))
+        self._run_bad(self.BASE.replace('{name: work, command: "true"}', "{name: work}"))
 
     def test_missing_parameter_file_crosses_cli_boundary(self):
         self.make_project(width=1)
@@ -902,9 +1027,12 @@ class TestOperationalFailureIntegration(TempProject):
         self.run_cli("run", "config.yaml", "--run-name", "other", "--no-submit", expect=0)
         self.run_cli("cancel", expect=1)
 
+
 class TestDeepReportAndDoctorIntegration(TempProject):
     def _prepare_pipeline(self, params=None, inline=False):
-        self.make_project(pipeline=True, width=1, params=params or "rid|count|label\na1|5|ok\na2|10|ok\n")
+        self.make_project(
+            pipeline=True, width=1, params=params or "rid|count|label\na1|5|ok\na2|10|ok\n"
+        )
         self.install_scheduler(run_inline=inline)
         self.run_cli("run", "config.yaml", "--no-submit", expect=0)
 
@@ -992,7 +1120,10 @@ class TestDeepReportAndDoctorIntegration(TempProject):
         self.run_cli("run", "config.yaml", expect=0)
         self.wait_for_jobs()
         row = self.store_for().resolve_row("a1")
-        self.write(os.path.join(self.path(".jobchain", "test-run", "logs", row.name), "archive.log"), "archive scheduler output\n")
+        self.write(
+            os.path.join(self.path(".jobchain", "test-run", "logs", row.name), "archive.log"),
+            "archive scheduler output\n",
+        )
         result = self.run_cli("show", "--row", "a1", "--output", "--stage", "archive", expect=0)
         self.assertIn("archive scheduler output", result.stdout)
 

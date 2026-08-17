@@ -17,8 +17,20 @@ ignore = [
     "SIM105",  # contextlib.suppress is less readable than try/except: pass here
     "RUF022",  # __all__ is grouped by concept with headings, which reads
                # better than alphabetical for a re-export list
+    "RUF012",  # JobStage.settings and validator lookup tables are class-level
+               # by design (frozen after construction, never mutated per
+               # instance); annotating each with ClassVar would just be noise
+               # on what is otherwise minimal, copyable example code.
 ]
 
 [lint.per-file-ignores]
 # Tests deliberately reach into private helpers to test them directly.
 "tests/*" = ["SLF001"]
+# These runners are invoked standalone (`make load`, `make bottlenecks`,
+# `python3 concurrency_tests/run.py`) as well as under run_tests.sh, so each
+# inserts the repo root onto sys.path itself before importing jobchain,
+# rather than relying on a PYTHONPATH the standalone invocation would not
+# have set.
+"bottleneck_tests/run.py" = ["E402"]
+"concurrency_tests/run.py" = ["E402"]
+"load_tests/run.py" = ["E402"]

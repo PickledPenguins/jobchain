@@ -350,11 +350,12 @@ def _resolve_rows(prepared: operations.PreparedRun, args: argparse.Namespace,
     """Resolve a row selection from identifiers or statuses."""
     store = prepared.store
     unique = prepared.schema.unique_fields
+    field_names = getattr(prepared.schema, "field_names", None)
     selectors = getattr(args, "rows", None) or []
     statuses = getattr(args, "statuses", None) or []
 
     if selectors:
-        return [store.resolve_row(s, unique) for s in selectors]
+        return [store.resolve_row(s, unique, field_names) for s in selectors]
     rows = store.load_rows()
     if statuses:
         wanted = [s.lower() for s in statuses]
@@ -551,7 +552,8 @@ def cmd_status(args: argparse.Namespace) -> int:
     rows = store.load_rows()
 
     if args.row:
-        rows = [store.resolve_row(args.row, prepared.schema.unique_fields)]
+        rows = [store.resolve_row(args.row, prepared.schema.unique_fields,
+                                  getattr(prepared.schema, "field_names", None))]
 
     views = report.filter_views(report.build_views(rows), args.statuses, args.stage)
     counts = report.summarize(store.load_rows())
@@ -703,7 +705,8 @@ def cmd_show(args: argparse.Namespace) -> int:
     if not args.row:
         raise UsageError("show needs --row, or --invalid")
 
-    row = store.resolve_row(args.row, prepared.schema.unique_fields)
+    row = store.resolve_row(args.row, prepared.schema.unique_fields,
+                            getattr(prepared.schema, "field_names", None))
 
     if args.output:
         return _show_output(prepared, row, args.stage)

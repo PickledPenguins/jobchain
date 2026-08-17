@@ -24,7 +24,7 @@
 
 set -u
 
-JC_VERSION="0.5"
+JC_VERSION="0.6"
 
 JC_EXIT_OK=0
 JC_EXIT_USAGE=1
@@ -83,11 +83,18 @@ option() {
 }
 
 # Write text to a path atomically: a sibling temporary, then a rename.
+#
+# chmod pins the file at 0644 regardless of the caller's umask, so a
+# permissive umask (e.g. 000 or 002, as on some batch/service accounts)
+# cannot leave run state group- or world-writable. This matches the
+# compiled helper, which opens with an explicit mode rather than relying
+# on whatever the shell's default file-creation mode would be.
 write_atomic() {
     path="$1"
     text="$2"
     tmp="$path.tmp.$$"
     printf '%s' "$text" > "$tmp" || return 1
+    chmod 644 "$tmp" || { rm -f "$tmp"; return 1; }
     mv -f "$tmp" "$path" || { rm -f "$tmp"; return 1; }
     return 0
 }
@@ -163,6 +170,9 @@ cmd_emit() {
         escaped=$(printf '%s' "$value" | sed "s/'/'\\\\''/g")
         printf "JC_OUT_%s='%s'\nexport JC_OUT_%s\n" \
             "$key" "$escaped" "$key" >> "$run_dir/handoff" || return $JC_EXIT_IO
+        # Pins the mode at 0644 regardless of the caller's umask; see
+        # write_atomic for why.
+        chmod 644 "$run_dir/handoff" 2>/dev/null
         pairs=$((pairs + 1))
     done
 
@@ -185,6 +195,10 @@ cmd_event() {
     printf '%s host=%s pid=%s %s\n' "$(timestamp)" \
         "$(hostname 2>/dev/null || echo unknown)" "$$" "$message" \
         >> "$home/events.log" || return $JC_EXIT_IO
+    # Pins the mode at 0644 the first time the file is created, regardless
+    # of the caller's umask; see write_atomic for why. A no-op chmod on
+    # every later append is harmless and cheaper than stat-ing first.
+    chmod 644 "$home/events.log" 2>/dev/null
     return $JC_EXIT_OK
 }
 
@@ -221,10 +235,15 @@ claim_row() {
 
         # The claim itself. mkdir either creates the directory or fails,
         # and the filesystem decides which, so exactly one caller wins.
+        # chmod pins the mode at 0755 regardless of the caller's umask (see
+        # write_atomic for why), matching the compiled helper's explicit
+        # mkdir(path, 0755).
         if mkdir "$run_dir" 2>/dev/null; then
+            chmod 755 "$run_dir" 2>/dev/null
             printf 'host=%s pid=%s time=%s\n' \
                 "$(hostname 2>/dev/null || echo unknown)" "$$" "$(timestamp)" \
                 > "$run_dir/claim"
+            chmod 644 "$run_dir/claim" 2>/dev/null
             JC_CLAIMED_ROW="$row"
             JC_CLAIMED_RUN="$run_dir"
             return $JC_EXIT_OK

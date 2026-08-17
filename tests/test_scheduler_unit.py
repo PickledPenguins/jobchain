@@ -3,21 +3,31 @@
 Consolidated from test_scheduler_{deep,exhaustive}.py into one file,
 matching this project's one-file-per-subsystem convention.
 """
+
 from __future__ import annotations
 
 import os
 import subprocess
-import unittest
-from unittest.mock import patch
-from jobchain.scheduler import (
-    ALIVE, FINISHED, UNKNOWN, PBS, SLURM, NullScheduler, Scheduler,
-    build_directives, describe_environment, write_script, verify_script,
-)
-from jobchain.core import SchedulerError, StateError
 import tempfile
+import unittest
 from types import SimpleNamespace
-from jobchain.core import StateError
-from jobchain.scheduler import Scheduler, NullScheduler, Submission, PBS, SLURM, RunContext, RowContext, write_script
+from unittest.mock import patch
+
+from jobchain.core import SchedulerError, StateError
+from jobchain.scheduler import (
+    ALIVE,
+    FINISHED,
+    PBS,
+    SLURM,
+    NullScheduler,
+    RowContext,
+    RunContext,
+    Scheduler,
+    Submission,
+    build_directives,
+    describe_environment,
+    write_script,
+)
 
 
 class TestSchedulerConstruction(unittest.TestCase):
@@ -39,7 +49,9 @@ class TestSchedulerConstruction(unittest.TestCase):
             self.assertFalse(Scheduler(PBS).available)
 
     def test_require_available_success(self):
-        with patch.object(Scheduler, "available", new_callable=unittest.mock.PropertyMock, return_value=True):
+        with patch.object(
+            Scheduler, "available", new_callable=unittest.mock.PropertyMock, return_value=True
+        ):
             Scheduler(PBS).require_available()
 
 
@@ -57,14 +69,19 @@ class TestSubmission(unittest.TestCase):
     def test_pbs_submission_with_dependency(self):
         with patch("jobchain.scheduler.subprocess.run", return_value=self._completed()) as run:
             Scheduler(PBS).submit("job.sh", {}, "77.server", "afterany")
-        self.assertEqual(run.call_args.args[0], ["qsub", "-W", "depend=afterany:77.server", "-v", "", "job.sh"])
+        self.assertEqual(
+            run.call_args.args[0], ["qsub", "-W", "depend=afterany:77.server", "-v", "", "job.sh"]
+        )
 
     def test_slurm_submission_with_dependency_and_environment(self):
         completed = subprocess.CompletedProcess(["sbatch"], 0, "Submitted batch job 88\n", "")
         with patch("jobchain.scheduler.subprocess.run", return_value=completed) as run:
             result = Scheduler(SLURM).submit("job.sh", {"Z": "9", "A": "1"}, "77", "afterok")
         self.assertEqual(result.job_id, "88")
-        self.assertEqual(run.call_args.args[0], ["sbatch", "--dependency=afterok:77", "--export=ALL,A=1,Z=9", "job.sh"])
+        self.assertEqual(
+            run.call_args.args[0],
+            ["sbatch", "--dependency=afterok:77", "--export=ALL,A=1,Z=9", "job.sh"],
+        )
 
     def test_submission_failure_is_returned(self):
         completed = self._completed("", "bad request", 1)
@@ -75,9 +92,8 @@ class TestSubmission(unittest.TestCase):
         self.assertIn("bad request", result.output)
 
     def test_submission_oserror_becomes_scheduler_error(self):
-        with patch("jobchain.scheduler.subprocess.run", side_effect=OSError("no qsub")):
-            with self.assertRaises(SchedulerError):
-                Scheduler(PBS).submit("job.sh", {})
+        with patch("jobchain.scheduler.subprocess.run", side_effect=OSError("no qsub")), self.assertRaises(SchedulerError):
+            Scheduler(PBS).submit("job.sh", {})
 
     def test_submission_empty_success_output_has_no_job_id(self):
         with patch("jobchain.scheduler.subprocess.run", return_value=self._completed("")):
@@ -93,11 +109,14 @@ class TestSubmission(unittest.TestCase):
             self._completed("3.server\n"),
         ]
         with patch("jobchain.scheduler.subprocess.run", side_effect=responses) as run:
-            result = scheduler.submit_pipeline([
-                ("a", "-", "a.sh"),
-                ("b", "afterok", "b.sh"),
-                ("c", "afterok", "c.sh"),
-            ], {})
+            result = scheduler.submit_pipeline(
+                [
+                    ("a", "-", "a.sh"),
+                    ("b", "afterok", "b.sh"),
+                    ("c", "afterok", "c.sh"),
+                ],
+                {},
+            )
         self.assertEqual([name for name, _ in result], ["a", "b"])
         self.assertEqual(run.call_count, 2)
 
@@ -108,7 +127,9 @@ class TestStatusParsing(unittest.TestCase):
 
     def test_all_pbs_alive_states(self):
         for state in ["Q", "R", "H", "W", "T", "S", "B", "M"]:
-            with self.subTest(state=state), patch("jobchain.scheduler._capture", return_value=self.completed(f"job_state = {state}\n")):
+            with self.subTest(state=state), patch(
+                "jobchain.scheduler._capture", return_value=self.completed(f"job_state = {state}\n")
+            ):
                 self.assertEqual(Scheduler(PBS).job_state("1"), ALIVE)
 
     def test_unknown_pbs_state_is_finished(self):
@@ -124,8 +145,19 @@ class TestStatusParsing(unittest.TestCase):
             self.assertEqual(Scheduler(PBS).job_state("1"), FINISHED)
 
     def test_all_slurm_squeue_alive_states(self):
-        for state in ["PENDING", "RUNNING", "SUSPENDED", "COMPLETING", "CONFIGURING", "RESIZING", "REQUEUED", "SIGNALING"]:
-            with self.subTest(state=state), patch("jobchain.scheduler._capture", return_value=self.completed(state + "\n")):
+        for state in [
+            "PENDING",
+            "RUNNING",
+            "SUSPENDED",
+            "COMPLETING",
+            "CONFIGURING",
+            "RESIZING",
+            "REQUEUED",
+            "SIGNALING",
+        ]:
+            with self.subTest(state=state), patch(
+                "jobchain.scheduler._capture", return_value=self.completed(state + "\n")
+            ):
                 self.assertEqual(Scheduler(SLURM).job_state("1"), ALIVE)
 
     def test_slurm_squeue_finished_state(self):
@@ -155,12 +187,18 @@ class TestStatusParsing(unittest.TestCase):
 
 class TestCancellation(unittest.TestCase):
     def test_pbs_cancel_success(self):
-        with patch("jobchain.scheduler._capture", return_value=subprocess.CompletedProcess([], 0, "ok\n", "")) as capture:
+        with patch(
+            "jobchain.scheduler._capture",
+            return_value=subprocess.CompletedProcess([], 0, "ok\n", ""),
+        ) as capture:
             self.assertEqual(Scheduler(PBS).cancel("4.server"), (True, "ok"))
             self.assertEqual(capture.call_args.args[0], ["qdel", "4.server"])
 
     def test_slurm_cancel_failure_includes_output(self):
-        with patch("jobchain.scheduler._capture", return_value=subprocess.CompletedProcess([], 1, "", "permission denied")):
+        with patch(
+            "jobchain.scheduler._capture",
+            return_value=subprocess.CompletedProcess([], 1, "", "permission denied"),
+        ):
             self.assertEqual(Scheduler(SLURM).cancel("4"), (False, "permission denied"))
 
     def test_cancel_unavailable(self):
@@ -184,47 +222,83 @@ class TestDirectiveMatrix(unittest.TestCase):
         self.assertIn("#PBS -l select=1", lines)
 
     def test_zero_and_empty_resources_are_omitted(self):
-        resources = {"nodes": 0, "ncpus": 0, "mem": "", "ngpus": None,
-                     "walltime": 0, "queue": "", "account": None}
+        resources = {
+            "nodes": 0,
+            "ncpus": 0,
+            "mem": "",
+            "ngpus": None,
+            "walltime": 0,
+            "queue": "",
+            "account": None,
+        }
         pbs = "\n".join(build_directives(resources, Scheduler(PBS), "r", "s", "x", "/log"))
         slurm = "\n".join(build_directives(resources, Scheduler(SLURM), "r", "s", "x", "/log"))
         self.assertNotIn("ncpus", pbs)
         self.assertNotIn("--nodes", slurm)
 
     def test_slurm_all_resources(self):
-        lines = build_directives({"nodes": 2, "ncpus": 4, "mem": "8G", "ngpus": 1,
-                                  "walltime": "1:00:00", "queue": "gpu", "account": "acct"},
-                                 Scheduler(SLURM), "r", "s", "x", "/log")
+        lines = build_directives(
+            {
+                "nodes": 2,
+                "ncpus": 4,
+                "mem": "8G",
+                "ngpus": 1,
+                "walltime": "1:00:00",
+                "queue": "gpu",
+                "account": "acct",
+            },
+            Scheduler(SLURM),
+            "r",
+            "s",
+            "x",
+            "/log",
+        )
         text = "\n".join(lines)
-        for expected in ["--nodes=2", "--cpus-per-task=4", "--mem=8G", "--gpus-per-node=1",
-                          "--time=1:00:00", "--partition=gpu", "--account=acct"]:
+        for expected in [
+            "--nodes=2",
+            "--cpus-per-task=4",
+            "--mem=8G",
+            "--gpus-per-node=1",
+            "--time=1:00:00",
+            "--partition=gpu",
+            "--account=acct",
+        ]:
             self.assertIn(expected, text)
 
     def test_extra_directive_hash_is_not_prefixed(self):
-        lines = build_directives({"extra_directives": ["#SBATCH --exclusive"]},
-                                 Scheduler(SLURM), "r", "s", "x", "/log")
+        lines = build_directives(
+            {"extra_directives": ["#SBATCH --exclusive"]}, Scheduler(SLURM), "r", "s", "x", "/log"
+        )
         self.assertIn("#SBATCH --exclusive", lines)
 
     def test_environment_is_sorted(self):
-        lines = build_directives({"env": {"Z": "2", "A": "1"}}, Scheduler(PBS), "r", "s", "x", "/log")
+        lines = build_directives(
+            {"env": {"Z": "2", "A": "1"}}, Scheduler(PBS), "r", "s", "x", "/log"
+        )
         self.assertLess(lines.index("export A='1'"), lines.index("export Z='2'"))
 
 
 class TestCaptureAndEnvironment(unittest.TestCase):
     def test_capture_missing_binary_returns_none(self):
         with patch("jobchain.scheduler.shutil.which", return_value=None):
-            self.assertIsNone(__import__("jobchain.scheduler", fromlist=["_capture"])._capture(["missing"]))
+            self.assertIsNone(
+                __import__("jobchain.scheduler", fromlist=["_capture"])._capture(["missing"])
+            )
 
     def test_capture_oserror_returns_none(self):
-        with patch("jobchain.scheduler.shutil.which", return_value="/bin/tool"), \
-             patch("jobchain.scheduler.subprocess.run", side_effect=OSError("bad")):
+        with patch("jobchain.scheduler.shutil.which", return_value="/bin/tool"), patch(
+            "jobchain.scheduler.subprocess.run", side_effect=OSError("bad")
+        ):
             from jobchain.scheduler import _capture
+
             self.assertIsNone(_capture(["tool"]))
 
     def test_capture_timeout_returns_none(self):
-        with patch("jobchain.scheduler.shutil.which", return_value="/bin/tool"), \
-             patch("jobchain.scheduler.subprocess.run", side_effect=subprocess.TimeoutExpired("tool", 60)):
+        with patch("jobchain.scheduler.shutil.which", return_value="/bin/tool"), patch(
+            "jobchain.scheduler.subprocess.run", side_effect=subprocess.TimeoutExpired("tool", 60)
+        ):
             from jobchain.scheduler import _capture
+
             self.assertIsNone(_capture(["tool"]))
 
     def test_environment_reports_all_scheduler_clients(self):
@@ -238,12 +312,14 @@ class TestCaptureAndEnvironment(unittest.TestCase):
 class TestContextAndScripts(unittest.TestCase):
     def test_work_dir_requires_row_name(self):
         run = __import__("jobchain.scheduler", fromlist=["RunContext"]).RunContext(
-            "r", "/home", Scheduler(PBS), "node", "{row.name}", "/log")
+            "r", "/home", Scheduler(PBS), "node", "{row.name}", "/log"
+        )
         with self.assertRaises(StateError):
             run.work_dir({}, "")
 
     def test_row_context_paths(self):
-        from jobchain.scheduler import RunContext, RowContext
+        from jobchain.scheduler import RowContext, RunContext
+
         run = RunContext("r", "/home", Scheduler(PBS), "node", "/work", "/log")
         row = RowContext(run, "001", 0, "stage", 3, "/work/001", True, "/tmp/x.sh")
         self.assertEqual(row.row_dir, "/home/rows/001")
@@ -253,28 +329,32 @@ class TestContextAndScripts(unittest.TestCase):
         self.assertEqual(row.log_dir, "/log/001")
 
     def test_pbs_preamble_and_epilogue_contain_pbs_job_id_and_chain(self):
-        from jobchain.scheduler import RunContext, RowContext
+        from jobchain.scheduler import RowContext, RunContext
+
         run = RunContext("r", "/home", Scheduler(PBS), "node", "/work", "/log")
         row = RowContext(run, "001", 0, "stage", 1, "/work", True)
         self.assertIn("PBS_JOBID", row.preamble())
-        self.assertIn('JC_CHAIN:-0', row.epilogue())
-        self.assertIn('submit --home', row.epilogue())
+        self.assertIn("JC_CHAIN:-0", row.epilogue())
+        self.assertIn("submit --home", row.epilogue())
 
     def test_slurm_preamble_uses_slurm_job_id(self):
-        from jobchain.scheduler import RunContext, RowContext
+        from jobchain.scheduler import RowContext, RunContext
+
         run = RunContext("r", "/home", Scheduler(SLURM), "node", "/work", "/log")
         row = RowContext(run, "001", 0, "stage", 1, "/work", False)
         self.assertIn("SLURM_JOB_ID", row.preamble())
         self.assertNotIn("submit --home", row.epilogue())
 
     def test_expand_uses_row_and_generation(self):
-        from jobchain.scheduler import RunContext, RowContext
+        from jobchain.scheduler import RowContext, RunContext
+
         run = RunContext("r", "/home", Scheduler(PBS), "node", "/work", "/log")
         row = RowContext(run, "001", 2, "stage", 4, "/work", False)
         self.assertEqual(row.expand("{row.name}-{row.index}", {"name": "n"}), "001-2")
 
     def test_emit_quotes_value(self):
-        from jobchain.scheduler import RunContext, RowContext
+        from jobchain.scheduler import RowContext, RunContext
+
         run = RunContext("r", "/home", Scheduler(PBS), "node", "/work", "/log")
         row = RowContext(run, "001", 0, "s", 1, "/work", False)
         self.assertIn("X='hello'", row.emit("X", "hello"))
@@ -282,53 +362,70 @@ class TestContextAndScripts(unittest.TestCase):
 
 class TestSchedulerRemaining(unittest.TestCase):
     def test_slurm_submit_without_and_with_dependency(self):
-        s=Scheduler(SLURM)
-        completed=SimpleNamespace(returncode=0,stdout="123",stderr="")
-        with patch("jobchain.scheduler.subprocess.run",return_value=completed) as run:
-            self.assertEqual(s.submit("x.sh",{"A":"1"}).job_id,"123")
-            self.assertEqual(s.submit("x.sh",{"A":"1"},depends_on="7",depends_type="afterany").job_id,"123")
-        self.assertIn("--dependency=afterany:7",run.call_args.args[0])
+        s = Scheduler(SLURM)
+        completed = SimpleNamespace(returncode=0, stdout="123", stderr="")
+        with patch("jobchain.scheduler.subprocess.run", return_value=completed) as run:
+            self.assertEqual(s.submit("x.sh", {"A": "1"}).job_id, "123")
+            self.assertEqual(
+                s.submit("x.sh", {"A": "1"}, depends_on="7", depends_type="afterany").job_id, "123"
+            )
+        self.assertIn("--dependency=afterany:7", run.call_args.args[0])
 
     def test_submit_pipeline_without_dependencies(self):
-        s=Scheduler(PBS)
-        submissions=[Submission(True,"1"),Submission(True,"2")]
-        with patch.object(s,"submit",side_effect=submissions) as submit:
-            result=s.submit_pipeline([("a","-","a.sh"),("b","-","b.sh")],{})
-        self.assertEqual(len(result),2); self.assertIsNone(submit.call_args_list[1].kwargs["depends_on"])
+        s = Scheduler(PBS)
+        submissions = [Submission(True, "1"), Submission(True, "2")]
+        with patch.object(s, "submit", side_effect=submissions) as submit:
+            result = s.submit_pipeline([("a", "-", "a.sh"), ("b", "-", "b.sh")], {})
+        self.assertEqual(len(result), 2)
+        self.assertIsNone(submit.call_args_list[1].kwargs["depends_on"])
 
     def test_null_scheduler_counter_and_submission(self):
-        s=NullScheduler(PBS)
-        self.assertTrue(s.available); self.assertTrue(s.require_available() is None)
-        a=s.submit("x",{}); b=s.submit("x",{},depends_on="1")
-        self.assertEqual(a.job_id,"dry-1"); self.assertEqual(b.job_id,"dry-2")
-        self.assertEqual(s.cancel("x"),(True,"")); self.assertEqual(s.job_state("x"),"UNKNOWN")
+        s = NullScheduler(PBS)
+        self.assertTrue(s.available)
+        self.assertTrue(s.require_available() is None)
+        a = s.submit("x", {})
+        b = s.submit("x", {}, depends_on="1")
+        self.assertEqual(a.job_id, "dry-1")
+        self.assertEqual(b.job_id, "dry-2")
+        self.assertEqual(s.cancel("x"), (True, ""))
+        self.assertEqual(s.job_state("x"), "UNKNOWN")
 
     def test_run_context_requires_row_name(self):
-        scheduler=Scheduler(PBS)
-        run=RunContext("r","/h",scheduler,"node","{run.home}/{row.name}","{run.home}/logs")
-        with self.assertRaises(StateError): run.work_dir({"x":1},"")
-        self.assertIn("RunContext",repr(run))
+        scheduler = Scheduler(PBS)
+        run = RunContext("r", "/h", scheduler, "node", "{run.home}/{row.name}", "{run.home}/logs")
+        with self.assertRaises(StateError):
+            run.work_dir({"x": 1}, "")
+        self.assertIn("RunContext", repr(run))
 
     def test_run_context_work_dir_and_row_context_directives(self):
-        scheduler=Scheduler(PBS)
-        run=RunContext("r","/h",scheduler,"node","{run.home}/{row.name}","{run.home}/logs")
-        self.assertEqual(run.work_dir({"x":1},"a"),"/h/a")
-        ctx=RowContext(run,"a",0,"s",1,"/h/a",False,"/h/a/s.sh")
-        self.assertIn("qsub",ctx.directives({})) if False else self.assertIsInstance(ctx.directives({}),str)
-        self.assertIn("JC_ROW",ctx.preamble()); self.assertIn("mark",ctx.epilogue()); self.assertNotIn("--next",ctx.epilogue())
+        scheduler = Scheduler(PBS)
+        run = RunContext("r", "/h", scheduler, "node", "{run.home}/{row.name}", "{run.home}/logs")
+        self.assertEqual(run.work_dir({"x": 1}, "a"), "/h/a")
+        ctx = RowContext(run, "a", 0, "s", 1, "/h/a", False, "/h/a/s.sh")
+        (
+            self.assertIn("qsub", ctx.directives({}))
+            if False
+            else self.assertIsInstance(ctx.directives({}), str)
+        )
+        self.assertIn("JC_ROW", ctx.preamble())
+        self.assertIn("mark", ctx.epilogue())
+        self.assertNotIn("--next", ctx.epilogue())
 
     def test_row_context_write(self):
-        scheduler=Scheduler(PBS); run=RunContext("r","/h",scheduler,"node","/h/{row.name}","/h/logs")
+        scheduler = Scheduler(PBS)
+        run = RunContext("r", "/h", scheduler, "node", "/h/{row.name}", "/h/logs")
         with tempfile.TemporaryDirectory() as d:
-            path=os.path.join(d,"script.sh"); ctx=RowContext(run,"a",0,"s",1,d,False,path)
-            self.assertEqual(ctx.write("echo hi\n"),path); self.assertTrue(os.access(path,os.X_OK))
+            path = os.path.join(d, "script.sh")
+            ctx = RowContext(run, "a", 0, "s", 1, d, False, path)
+            self.assertEqual(ctx.write("echo hi\n"), path)
+            self.assertTrue(os.access(path, os.X_OK))
 
     def test_write_script_without_directory(self):
         with tempfile.TemporaryDirectory() as d:
-            old=os.getcwd(); os.chdir(d)
+            old = os.getcwd()
+            os.chdir(d)
             try:
-                self.assertEqual(write_script("x.sh","echo hi\n"),"x.sh")
+                self.assertEqual(write_script("x.sh", "echo hi\n"), "x.sh")
                 self.assertTrue(os.path.exists("x.sh"))
-            finally: os.chdir(old)
-
-
+            finally:
+                os.chdir(old)

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import multiprocessing
 import os
-import queue
 import sys
 import tempfile
 import time

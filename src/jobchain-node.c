@@ -36,7 +36,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#define JC_VERSION "0.5"
+#define JC_VERSION "0.6"
 
 /* Longest path the helper will construct. Paths are bounded rather than
  * dynamically grown so that no allocation can fail on the hot path. */
@@ -90,6 +90,7 @@ static void jc_scheduler_commands(const char **submit_cmd,
 static void jc_error(const char *fmt, ...);
 static int jc_path_join(char *dest, size_t dest_size, const char *base,
                         const char *leaf);
+static int jc_shell_quote(char *dest, size_t dest_size, const char *value);
 static int jc_exists(const char *path);
 static int jc_read_line(const char *path, char *buf, size_t buf_size);
 static int jc_write_atomic(const char *path, const char *text);
@@ -121,6 +122,47 @@ static int jc_path_join(char *dest, size_t dest_size, const char *base, const ch
     if (written < 0 || (size_t)written >= dest_size) {
         return -1;
     }
+    return 0;
+}
+
+/*
+ * Single-quote a string for safe inclusion in a shell command line, the way
+ * store.py's _shell_quote does on the Python side: wrap in single quotes,
+ * and escape any embedded single quote as '\'' (close the quote, emit an
+ * escaped literal quote, reopen). This is the only escape POSIX single
+ * quoting needs, and it is what makes jc_submit_row's popen() command safe
+ * against a value containing shell metacharacters. Truncation is refused
+ * rather than silently accepted, matching every other bounded routine here.
+ */
+static int jc_shell_quote(char *dest, size_t dest_size, const char *value)
+{
+    size_t out = 0;
+
+    if (dest == NULL || value == NULL || dest_size < 3) {
+        return -1;
+    }
+    dest[out++] = '\'';
+    for (; *value != '\0'; value++) {
+        if (*value == '\'') {
+            if (out + 4 >= dest_size) {
+                return -1;
+            }
+            dest[out++] = '\'';
+            dest[out++] = '\\';
+            dest[out++] = '\'';
+            dest[out++] = '\'';
+        } else {
+            if (out + 1 >= dest_size) {
+                return -1;
+            }
+            dest[out++] = *value;
+        }
+    }
+    if (out + 2 > dest_size) {
+        return -1;
+    }
+    dest[out++] = '\'';
+    dest[out] = '\0';
     return 0;
 }
 
@@ -712,6 +754,10 @@ static int jc_submit_row(const char *home, const char *row, const char *run_dir)
     char previous[JC_LINE_MAX];
     char jobid[JC_LINE_MAX];
     char line[JC_LINE_MAX];
+    char q_home[JC_PATH_MAX * 2];
+    char q_row[JC_PATH_MAX * 2];
+    char q_run_dir[JC_PATH_MAX * 2];
+    char q_script[JC_PATH_MAX * 2];
     char *stage;
     char *depends;
     char *script;
@@ -727,9 +773,18 @@ static int jc_submit_row(const char *home, const char *row, const char *run_dir)
 
     jc_scheduler_commands(&submit_cmd, &export_flag, &depend_flag);
 
-    if (jc_path_join(manifest_path, sizeof(manifest_path), home, "rows") != 0) {
+    /* home, row, and run_dir reach here from the run's own state directory
+     * names, but run_dir's ancestry traces back to a schema-validated path
+     * template that a row column can influence -- quote every value that
+     * crosses into the submission command line, not just the ones that look
+     * risky today. */
+    if (jc_shell_quote(q_home, sizeof(q_home), home) != 0 ||
+        jc_shell_quote(q_row, sizeof(q_row), row) != 0 ||
+        jc_shell_quote(q_run_dir, sizeof(q_run_dir), run_dir) != 0) {
+        jc_error("home, row, or run directory too long to quote safely");
         return JC_EXIT_IO;
     }
+
     snprintf(manifest_path, sizeof(manifest_path), "%s/rows/%s/manifest", home, row);
 
     manifest = fopen(manifest_path, "r");
@@ -760,15 +815,21 @@ static int jc_submit_row(const char *home, const char *row, const char *run_dir)
         }
         *script++ = '\0';
 
+        if (jc_shell_quote(q_script, sizeof(q_script), script) != 0) {
+            jc_error("script path too long to quote safely for stage %s", stage);
+            fclose(manifest);
+            return JC_EXIT_IO;
+        }
+
         if (previous[0] != '\0' && strcmp(depends, "-") != 0) {
             written = snprintf(command, sizeof(command),
-                     "%s %s%s:%s %sJC_HOME='%s',JC_ROW='%s',JC_RUN='%s',JC_CHAIN=1 '%s' 2>&1",
+                     "%s %s%s:%s %sJC_HOME=%s,JC_ROW=%s,JC_RUN=%s,JC_CHAIN=1 %s 2>&1",
                      submit_cmd, depend_flag, depends, previous,
-                     export_flag, home, row, run_dir, script);
+                     export_flag, q_home, q_row, q_run_dir, q_script);
         } else {
             written = snprintf(command, sizeof(command),
-                     "%s %sJC_HOME='%s',JC_ROW='%s',JC_RUN='%s',JC_CHAIN=1 '%s' 2>&1",
-                     submit_cmd, export_flag, home, row, run_dir, script);
+                     "%s %sJC_HOME=%s,JC_ROW=%s,JC_RUN=%s,JC_CHAIN=1 %s 2>&1",
+                     submit_cmd, export_flag, q_home, q_row, q_run_dir, q_script);
         }
         if (written < 0 || (size_t)written >= sizeof(command)) {
             jc_error("submission command too long for stage %s", stage);

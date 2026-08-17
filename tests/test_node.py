@@ -149,6 +149,38 @@ class TestClaim(NodeHelperCase):
         self.assertEqual(completed.stdout.strip(), "000001")
 
 
+class TestSubmitQuoting(NodeHelperCase):
+    """jc_submit_row builds a scheduler command by shell-quoting home, row,
+    run_dir, and each stage's script path before handing the whole line to
+    popen(). A value containing a single quote is the case that exercises
+    the escaping (close quote, escaped literal quote, reopen); an
+    unescaped occurrence would break the generated shell command instead
+    of surviving as one argument.
+    """
+
+    def test_a_script_path_containing_a_single_quote_submits_cleanly(self):
+        home = self.make_home(1)
+        bin_dir = self.install_scheduler()
+        os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+
+        script = self.write_executable(
+            "work/o'brien/01-only.sh", "#!/bin/sh\nexit 0\n")
+        with open(os.path.join(home, "rows", "000001", "manifest"), "w",
+                  encoding="utf-8") as handle:
+            handle.write(f"only\t-\t{script}\n")
+
+        completed = subprocess.run(
+            [NODE_BINARY, "submit", "--home", home, "--next"],
+            capture_output=True, text=True, check=False)
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        submitted = self.submissions()
+        self.assertEqual(len(submitted), 1)
+        # The script path reached qsub as one intact argument, single quote
+        # and all -- not split, and not interpreted as shell syntax.
+        self.assertIn(script, submitted[0])
+
+
 class TestConcurrency(NodeHelperCase):
     """The property the whole design rests on: one row, one winner."""
 
@@ -346,7 +378,7 @@ class TestSelftestAndUsage(NodeHelperCase):
         self.assertEqual(leftovers, [])
 
     def test_version_and_help(self):
-        self.assertIn("0.5", self.run_node("version").stdout)
+        self.assertIn("0.6", self.run_node("version").stdout)
         self.assertEqual(self.run_node("--help").returncode, 0)
 
     def test_unknown_command_is_a_usage_error(self):
@@ -448,4 +480,4 @@ class TestShellImplementation(NodeHelperCase):
     def test_usage_errors_match_the_compiled_helper(self):
         self.assertEqual(self.run_shell("claim").returncode, 1)
         self.assertEqual(self.run_shell("frobnicate").returncode, 1)
-        self.assertIn("0.5", self.run_shell("version").stdout)
+        self.assertIn("0.6", self.run_shell("version").stdout)

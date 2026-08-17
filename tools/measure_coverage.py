@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -25,28 +24,16 @@ CATEGORIES = {
         "tests.test_schema_scan",
         "tests.test_report_scheduler",
         "tests.test_errors",
-        "tests.unit.test_operations_helpers",
-        "tests.unit.test_store_unit",
-        "tests.unit.test_store_deep",
-        "tests.unit.test_core_unit",
-        "tests.unit.test_schema_loading",
-        "tests.unit.test_pipeline_deep",
-        "tests.unit.test_scheduler_deep",
-        "tests.unit.test_operations_remaining",
-        "tests.unit.test_config_remaining",
-        "tests.unit.test_operations_deep_remaining",
-        "tests.unit.test_operations_gap_closure",
-        "tests.unit.test_operations_final_gaps",
-        "tests.unit.test_cli_deep",
-        "tests.unit.test_parse_exhaustive",
-        "tests.unit.test_report_exhaustive",
-        "tests.unit.test_schema_exhaustive",
-        "tests.unit.test_store_exhaustive",
-        "tests.unit.test_operations_exhaustive",
-        "tests.unit.test_main_module",
-        "tests.unit.test_config_exhaustive",
-        "tests.unit.test_scheduler_exhaustive",
-        "tests.unit.test_pipeline_exhaustive",
+        "tests.test_cli_unit",
+        "tests.test_config_unit",
+        "tests.test_core_unit",
+        "tests.test_operations_unit",
+        "tests.test_parse_unit",
+        "tests.test_pipeline_unit",
+        "tests.test_report_unit",
+        "tests.test_scheduler_unit",
+        "tests.test_schema_unit",
+        "tests.test_store_unit",
     ],
     "smoke": ["tests.test_examples", "tests.test_example_matrix"],
     "regression": [

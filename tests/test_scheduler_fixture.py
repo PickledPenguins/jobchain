@@ -33,9 +33,15 @@ class TestSchedulerFixtureLifecycle(TempProject):
         self.make_project(pipeline=True, width=1)
         self.install_scheduler()
 
+        # The job sleeps far longer than any plausible process-launch jitter
+        # on a loaded machine, so a generous elapsed threshold still clearly
+        # distinguishes "qsub returned immediately" from "qsub waited for
+        # the job," without the test flaking under contention the way a
+        # threshold close to the sleep duration would.
+        job_seconds = 2.0
         script = self.write_executable(
             "slow.sh",
-            "#!/bin/sh\nsleep 0.5\n",
+            f"#!/bin/sh\nsleep {job_seconds}\n",
         )
         started = time.monotonic()
         result = subprocess.run(
@@ -43,13 +49,13 @@ class TestSchedulerFixtureLifecycle(TempProject):
             cwd=self.tmp,
             capture_output=True,
             text=True,
-            timeout=2,
+            timeout=job_seconds + 5,
             check=False,
         )
         elapsed = time.monotonic() - started
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertLess(elapsed, 0.4)
+        self.assertLess(elapsed, job_seconds / 2)
         self.wait_for_jobs()
 
     def test_dependency_chain_reaches_quiescence_repeatedly(self):

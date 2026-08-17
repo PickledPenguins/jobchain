@@ -39,7 +39,7 @@ class TestCommandSurface(TempProject):
         self.assertNotIn("--pipeline", result.stdout)
 
     def test_version(self):
-        self.assertIn("0.5", self.run_cli("--version", expect=0).stdout)
+        self.assertIn("0.6", self.run_cli("--version", expect=0).stdout)
 
     def test_no_command_shows_help(self):
         self.assertIn("COMMAND", self.run_cli(expect=1).stdout)
