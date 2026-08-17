@@ -26,7 +26,7 @@ from ..scheduler import (
     verify_script,
 )
 from ..schema import Schema, apply_base_dir, load_schema_source
-from ..store import ACTIVE, RUNNING, RowState, Store, row_name
+from ..store import ACTIVE, RUNNING, ManifestEntry, RowState, Store, row_name
 from ._util import _digest, _write_json_file
 from .submit import _submit_chains
 
@@ -443,8 +443,8 @@ def _generate_scripts(prepared: PreparedRun, rows: Sequence[RowState],
     failures: List[str] = []
     written = 0
 
-    def render(row: RowState) -> Tuple[str, List[Tuple[str, str, str]], List[str]]:
-        entries: List[Tuple[str, str, str]] = []
+    def render(row: RowState) -> Tuple[str, List[ManifestEntry], List[str]]:
+        entries: List[ManifestEntry] = []
         problems: List[str] = []
         for spec in pipeline.specs:
             stage = pipeline.stage(spec.name)
@@ -455,8 +455,8 @@ def _generate_scripts(prepared: PreparedRun, rows: Sequence[RowState],
                 if reason:
                     problems.append(f"row {row.name} stage {spec.name}: {reason}")
                     continue
-                entries.append((spec.name, spec.depends if spec.position > 1 else "-",
-                                path))
+                entries.append(ManifestEntry(
+                    spec.name, spec.depends if spec.position > 1 else "-", path))
                 trace("wrote %s (row %s, stage %s)", path, row.name, spec.name)
             except Exception as exc:
                 problems.append(f"row {row.name} stage {spec.name}: {exc}")

@@ -18,6 +18,7 @@ from jobchain.store import (
     CANCELLED,
     DONE,
     PENDING,
+    ManifestEntry,
     RowState,
     RowStatus,
     RunState,
@@ -489,7 +490,8 @@ class TestStoreDeep(unittest.TestCase):
         with open(os.path.join(run, "handoff"), "w") as h:
             h.write("JC_OUT_A=local\nJC_OUT_B=two\n")
         self.store.write_manifest(
-            "000001", [("prep", "-", "prep.sh"), ("solve", "afterok", "solve.sh")]
+            "000001", [ManifestEntry("prep", "-", "prep.sh"),
+                      ManifestEntry("solve", "afterok", "solve.sh")]
         )
         run2 = self.store.run_dir("000001", 2)
         os.makedirs(run2, exist_ok=True)

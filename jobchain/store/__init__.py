@@ -75,6 +75,7 @@ from .model import (
     QUEUED,
     RUNNING,
     TERMINAL,
+    ManifestEntry,
     RowState,
     RowStatus,
     RunState,
@@ -90,8 +91,8 @@ from .node import find_node_binary
 #: not an artifact ruff's "unused import" check would otherwise flag.
 __all__ = [
     "ACTIVE", "Any", "CANCELLED", "CLAIMED", "DEFAULT_ROOT", "DONE", "Dict",
-    "Enum", "FAILED", "INVALID", "List", "NODE_BINARY_NAME", "NodeHelperError",
-    "Optional", "PENDING", "QUEUED", "RUNNING", "RowState", "RowStatus",
+    "Enum", "FAILED", "INVALID", "List", "ManifestEntry", "NODE_BINARY_NAME",
+    "NodeHelperError", "Optional", "PENDING", "QUEUED", "RUNNING", "RowState", "RowStatus",
     "RunState", "Sequence", "StageState", "StateError", "Store", "TERMINAL",
     "Tuple", "VERSION", "_code_of", "_column_value", "_hostname", "_pad",
     "_parse_assignments", "_parse_handoff", "_read_json", "_read_lines",

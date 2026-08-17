@@ -5,7 +5,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import field as dc_field
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, NamedTuple, Optional
+
+
+class ManifestEntry(NamedTuple):
+    """One line of a row's manifest: one pipeline stage, in submission order.
+
+    ``depends`` is the dependency type (e.g. ``"afterany"``) linking this
+    stage to the previous one's job id, or ``"-"`` for a stage with no
+    predecessor -- the literal value the three-column manifest file stores,
+    so no translation happens at the read/write boundary.
+    """
+
+    stage: str
+    depends: str
+    script: str
 
 
 class RowStatus(str, Enum):

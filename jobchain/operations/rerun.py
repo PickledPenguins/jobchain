@@ -18,7 +18,7 @@ from ..core import DataError, UsageError, get_logger
 from ..parse import scan_row
 from ..scheduler import verify_script
 from ..schema import Schema
-from ..store import ACTIVE, DONE, QUEUED, RowState
+from ..store import ACTIVE, DONE, QUEUED, ManifestEntry, RowState
 from .lifecycle import PreparedRun, _context_for
 from .submit import _record_submissions
 
@@ -281,7 +281,7 @@ def _regenerate_row(prepared: PreparedRun, name: str) -> int:
     """Rewrite every stage script for one row."""
     store, pipeline = prepared.store, prepared.pipeline
     row = store.load_row(name)
-    entries: List[Tuple[str, str, str]] = []
+    entries: List[ManifestEntry] = []
     for spec in pipeline.specs:
         stage = pipeline.stage(spec.name)
         ctx = _context_for(prepared, row, spec)
@@ -289,7 +289,8 @@ def _regenerate_row(prepared: PreparedRun, name: str) -> int:
         reason = verify_script(path)
         if reason:
             raise DataError(f"row {name} stage {spec.name}: {reason}")
-        entries.append((spec.name, spec.depends if spec.position > 1 else "-", path))
+        entries.append(ManifestEntry(
+            spec.name, spec.depends if spec.position > 1 else "-", path))
     store.write_manifest(name, entries)
     return len(entries)
 
@@ -307,12 +308,12 @@ def _submit_selected(prepared: PreparedRun, name: str, stages: Sequence[str],
     run_dir = store.run_dir(name, row.generation)
     os.makedirs(run_dir, exist_ok=True)
 
-    entries = []
+    entries: List[ManifestEntry] = []
     for position, stage in enumerate(stages):
         if stage not in manifest:
             continue
         depends, script = manifest[stage]
-        entries.append((stage, "-" if position == 0 else depends, script))
+        entries.append(ManifestEntry(stage, "-" if position == 0 else depends, script))
 
     environment = {"JC_HOME": store.home, "JC_ROW": name, "JC_RUN": run_dir}
     if chain:

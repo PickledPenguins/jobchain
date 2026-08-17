@@ -35,7 +35,7 @@ from enum import Enum
 from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple
 
 from .core import PBS, SLURM, SchedulerError, StateError, get_logger, trace
-from .store import _write_text, shell_quote
+from .store import ManifestEntry, _write_text, shell_quote
 
 
 class JobState(str, Enum):
@@ -183,7 +183,7 @@ class SchedulerBackend(ABC):
         return Submission(job_id=self.parse_job_id(completed.stdout),
                           success=True, command=command, output=output)
 
-    def submit_pipeline(self, entries: Sequence[Tuple[str, str, str]],
+    def submit_pipeline(self, entries: Sequence[ManifestEntry],
                         environment: Dict[str, str]) -> List[Tuple[str, Submission]]:
         """Submit a row's stages in order, threading dependency job ids.
 

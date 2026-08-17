@@ -25,7 +25,7 @@ from .io import (
     render_env,
     shell_quote,
 )
-from .model import DEFAULT_ROOT, PENDING, RowState, RunState, StageState
+from .model import DEFAULT_ROOT, PENDING, ManifestEntry, RowState, RunState, StageState
 from .node import find_node_binary
 
 
@@ -231,18 +231,18 @@ class Store:
         _write_text(os.path.join(directory, "gen"), str(generation))
 
     def write_manifest(self, name: str,
-                       entries: Sequence[Tuple[str, str, str]]) -> None:
+                       entries: Sequence[ManifestEntry]) -> None:
         """Write the stage manifest a submitter reads.
 
         Three columns: stage name, dependency type, script path. Plain text so
         the compute-node side needs no YAML parser and no knowledge of the
         pipeline.
         """
-        text = "".join(f"{stage}\t{depends or '-'}\t{script}\n"
-                       for stage, depends, script in entries)
+        text = "".join(f"{entry.stage}\t{entry.depends or '-'}\t{entry.script}\n"
+                       for entry in entries)
         _write_text(os.path.join(self.row_dir(name), "manifest"), text)
 
-    def read_manifest(self, name: str) -> List[Tuple[str, str, str]]:
+    def read_manifest(self, name: str) -> List[ManifestEntry]:
         text = _read_text(os.path.join(self.row_dir(name), "manifest"), "")
         entries = []
         for line in text.splitlines():
@@ -250,7 +250,7 @@ class Store:
                 continue
             parts = line.split("\t")
             if len(parts) == 3:
-                entries.append((parts[0], parts[1], parts[2]))
+                entries.append(ManifestEntry(parts[0], parts[1], parts[2]))
         return entries
 
     def write_index(self, names: Sequence[str]) -> None:
@@ -369,7 +369,7 @@ class Store:
         )
 
     def _load_run(self, run_dir: str, generation: int,
-                  manifest: Sequence[Tuple[str, str, str]]) -> RunState:
+                  manifest: Sequence[ManifestEntry]) -> RunState:
         """Load one generation's stage states and handoff values."""
         timeline = _read_lines(os.path.join(run_dir, "timeline"))
         # Values carried forward, then this generation's own, which win.
