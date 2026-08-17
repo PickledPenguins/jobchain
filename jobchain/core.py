@@ -14,10 +14,16 @@ from __future__ import annotations
 import logging
 import os
 import sys
-from typing import Optional
+from typing import AbstractSet, Any, Dict, Optional, Type
 
 #: Semantic version of the whole project (Python package and C helper).
 VERSION = "0.6"
+
+#: Scheduler kinds this tool supports. Shared here (rather than only in
+#: scheduler.py) because config.py validates a configured scheduler string
+#: before any Scheduler object exists.
+PBS = "pbs"
+SLURM = "slurm"
 
 # ---------------------------------------------------------------------------
 # Exit codes
@@ -128,6 +134,28 @@ class ConflictError(JobChainError):
     """An edit was requested against a row whose job is still active."""
 
     exit_code = EXIT_CONFLICT
+
+
+# ---------------------------------------------------------------------------
+# Shared validation
+# ---------------------------------------------------------------------------
+
+
+def reject_unknown_keys(mapping: Dict[str, Any], allowed: AbstractSet[str],
+                        where: str, error_cls: Type[ConfigError] = ConfigError) -> None:
+    """Fail on unrecognized keys so that a typo surfaces immediately.
+
+    Used at every "a dict from user-supplied YAML/config must contain only
+    known keys" boundary (run configuration, schema, pipeline) -- one
+    implementation instead of one per module, each raising the error type
+    appropriate to what it's validating.
+    """
+    unknown = set(mapping) - allowed
+    if unknown:
+        raise error_cls(
+            f"unknown key(s) {sorted(unknown)} in {where}; recognized keys are "
+            f"{sorted(allowed)}"
+        )
 
 
 # ---------------------------------------------------------------------------

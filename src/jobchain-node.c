@@ -45,38 +45,6 @@
 /* Longest single line the helper reads from a state file. */
 #define JC_LINE_MAX 1024
 
-/* Which scheduler to submit to. Read at run time from JC_SCHEDULER,
- * exported by every generated script's preamble to match that run's
- * configured scheduler; JOBCHAIN_SCHEDULER is a fallback for the helper
- * invoked directly, outside a generated script. PBS is the default,
- * matching the tool itself. A single build of this binary serves both
- * schedulers -- there is no compile-time scheduler flag.
- *
- * export_flag carries its own trailing separator so the caller can paste
- * it directly against the KEY=VALUE list with no space in between: PBS's
- * "-v" needs a following space before its argument, while Slurm's
- * "--export=ALL," must be glued straight onto the list with a comma and
- * no space, or the shell splits the KEY=VALUE list into a second,
- * unwanted positional argument. */
-static void jc_scheduler_commands(const char **submit_cmd,
-                                   const char **export_flag,
-                                   const char **depend_flag)
-{
-    const char *scheduler = getenv("JC_SCHEDULER");
-    if (scheduler == NULL || scheduler[0] == '\0') {
-        scheduler = getenv("JOBCHAIN_SCHEDULER");
-    }
-    if (scheduler != NULL && strcmp(scheduler, "slurm") == 0) {
-        *submit_cmd = "sbatch";
-        *export_flag = "--export=ALL,";
-        *depend_flag = "--dependency=";
-    } else {
-        *submit_cmd = "qsub";
-        *export_flag = "-v ";
-        *depend_flag = "-W depend=";
-    }
-}
-
 /* Exit codes. These mirror the Python front end's taxonomy where the two
  * overlap, so a wrapper script can branch on the cause either way. */
 #define JC_EXIT_OK 0
@@ -93,6 +61,10 @@ static int jc_path_join(char *dest, size_t dest_size, const char *base,
 static int jc_shell_quote(char *dest, size_t dest_size, const char *value);
 static int jc_exists(const char *path);
 static int jc_read_line(const char *path, char *buf, size_t buf_size);
+static int jc_scheduler_facts(const char *home,
+                               char *submit_cmd, size_t submit_cmd_size,
+                               char *export_flag, size_t export_flag_size,
+                               char *depend_flag, size_t depend_flag_size);
 static int jc_write_atomic(const char *path, const char *text);
 static int jc_append_line(const char *path, const char *text);
 static void jc_timestamp(char *buf, size_t buf_size);
@@ -192,6 +164,49 @@ static int jc_read_line(const char *path, char *buf, size_t buf_size)
     length = strlen(buf);
     while (length > 0 && (buf[length - 1] == '\n' || buf[length - 1] == '\r')) {
         buf[--length] = '\0';
+    }
+    return 0;
+}
+
+/*
+ * Which scheduler to submit to. This helper never branches on PBS vs Slurm
+ * itself: jobchain writes three small facts under the run's home directory
+ * when it prepares the run (SchedulerBackend.write_facts, in scheduler.py),
+ * and this just reads them back. That keeps qsub/sbatch syntax expressed in
+ * exactly one place -- the Python backends -- rather than duplicated into
+ * this C helper and the shell one independently.
+ *
+ * export_flag carries its own trailing separator so the caller can paste it
+ * directly against the KEY=VALUE list with no space in between: PBS's "-v"
+ * needs a following space before its argument, while Slurm's
+ * "--export=ALL," must be glued straight onto the list with a comma and no
+ * space, or the shell splits the KEY=VALUE list into a second, unwanted
+ * positional argument.
+ */
+static int jc_scheduler_facts(const char *home,
+                               char *submit_cmd, size_t submit_cmd_size,
+                               char *export_flag, size_t export_flag_size,
+                               char *depend_flag, size_t depend_flag_size)
+{
+    char path[JC_PATH_MAX];
+
+    if (jc_path_join(path, sizeof(path), home, "scheduler.submit_cmd") != 0 ||
+        jc_read_line(path, submit_cmd, submit_cmd_size) != 0) {
+        jc_error("could not read scheduler facts under %s; was this run "
+                 "prepared by jobchain?", home);
+        return -1;
+    }
+    if (jc_path_join(path, sizeof(path), home, "scheduler.export_flag") != 0 ||
+        jc_read_line(path, export_flag, export_flag_size) != 0) {
+        jc_error("could not read scheduler facts under %s; was this run "
+                 "prepared by jobchain?", home);
+        return -1;
+    }
+    if (jc_path_join(path, sizeof(path), home, "scheduler.depend_flag") != 0 ||
+        jc_read_line(path, depend_flag, depend_flag_size) != 0) {
+        jc_error("could not read scheduler facts under %s; was this run "
+                 "prepared by jobchain?", home);
+        return -1;
     }
     return 0;
 }
@@ -767,11 +782,15 @@ static int jc_submit_row(const char *home, const char *row, const char *run_dir)
     size_t length;
     int written;
     int submitted = 0;
-    const char *submit_cmd;
-    const char *export_flag;
-    const char *depend_flag;
+    char submit_cmd[64];
+    char export_flag[32];
+    char depend_flag[32];
 
-    jc_scheduler_commands(&submit_cmd, &export_flag, &depend_flag);
+    if (jc_scheduler_facts(home, submit_cmd, sizeof(submit_cmd),
+                           export_flag, sizeof(export_flag),
+                           depend_flag, sizeof(depend_flag)) != 0) {
+        return JC_EXIT_STATE;
+    }
 
     /* home, row, and run_dir reach here from the run's own state directory
      * names, but run_dir's ancestry traces back to a schema-validated path

@@ -20,9 +20,12 @@ from jobchain.scheduler import (
     PBS,
     SLURM,
     NullScheduler,
+    PBSBackend,
     RowContext,
     RunContext,
     Scheduler,
+    SchedulerBackend,
+    SlurmBackend,
     Submission,
     build_directives,
     describe_environment,
@@ -49,10 +52,51 @@ class TestSchedulerConstruction(unittest.TestCase):
             self.assertFalse(Scheduler(PBS).available)
 
     def test_require_available_success(self):
-        with patch.object(
-            Scheduler, "available", new_callable=unittest.mock.PropertyMock, return_value=True
-        ):
+        with patch("jobchain.scheduler.shutil.which", return_value="/bin/qsub"):
             Scheduler(PBS).require_available()
+
+
+class TestSchedulerBackendContract(unittest.TestCase):
+    """Guards the abstract-base/subclass shape itself, not just behavior:
+    a future scheduler backend that forgets to implement one of the
+    abstract members should fail here, at construction, rather than as a
+    confusing AttributeError deep in a submission or directive call.
+    """
+
+    def test_concrete_backends_implement_every_abstract_member(self):
+        for cls in (PBSBackend, SlurmBackend):
+            self.assertFalse(
+                cls.__abstractmethods__,
+                f"{cls.__name__} left abstract: {cls.__abstractmethods__}")
+
+    def test_null_scheduler_directives_match_the_real_backend(self):
+        resources = {"nodes": 2, "ncpus": 4, "walltime": "01:00:00"}
+        for kind in (PBS, SLURM):
+            real = Scheduler(kind).render_directives(
+                resources, "run", "stage", "row", "/log")
+            dry = NullScheduler(kind).render_directives(
+                resources, "run", "stage", "row", "/log")
+            self.assertEqual(real, dry, f"directive mismatch for {kind}")
+        self.assertIsInstance(Scheduler(PBS), SchedulerBackend)
+        self.assertIsInstance(NullScheduler(PBS), SchedulerBackend)
+
+    def test_write_facts_matches_the_backends_own_properties(self):
+        # The compute-node helpers (C and shell) read these files instead of
+        # knowing PBS/Slurm syntax themselves; a mismatch here would mean a
+        # chained submission silently used the wrong scheduler.
+        for kind in (PBS, SLURM):
+            backend = Scheduler(kind)
+            with tempfile.TemporaryDirectory() as home:
+                backend.write_facts(home)
+                with open(os.path.join(home, "scheduler.submit_cmd")) as f:
+                    submit_cmd = f.read().rstrip("\n")
+                with open(os.path.join(home, "scheduler.export_flag")) as f:
+                    export_flag = f.read().rstrip("\n")
+                with open(os.path.join(home, "scheduler.depend_flag")) as f:
+                    depend_flag = f.read().rstrip("\n")
+            self.assertEqual(submit_cmd, backend.submit_binary, kind)
+            self.assertEqual(export_flag, backend.export_flag, kind)
+            self.assertEqual(depend_flag, backend.depend_flag, kind)
 
 
 class TestSubmission(unittest.TestCase):

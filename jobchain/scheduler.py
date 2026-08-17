@@ -12,6 +12,14 @@ has to submit an already-rendered file.
 Job state is reduced to three values. A scheduler that has forgotten a job
 reports it as finished, because both schedulers age completed jobs out of
 their active queues and an absent job is never one that is still running.
+
+Scheduler-specific behavior (submit-command syntax, directive prefixes, job-
+state queries, cancellation) lives entirely on ``SchedulerBackend``
+subclasses -- one per scheduler kind -- following the same
+abstract-base-plus-registry shape ``schema.py``'s validators already use.
+Everything else (subprocess execution, dependency threading across a
+pipeline, dry-run behavior) is scheduler-agnostic and stays on the base
+class or as free functions.
 """
 
 from __future__ import annotations
@@ -20,20 +28,44 @@ import os
 import shutil
 import stat
 import subprocess
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from dataclasses import field as dc_field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from enum import Enum
+from typing import Any, ClassVar, Dict, List, Optional, Sequence, Tuple
 
-from .core import SchedulerError, StateError, get_logger, trace
-from .store import _shell_quote
+from .core import PBS, SLURM, SchedulerError, StateError, get_logger, trace
+from .store import _write_text, shell_quote
 
-PBS = "pbs"
-SLURM = "slurm"
 
-#: Reduced job states.
-ALIVE = "ALIVE"        # queued, held, or running
-FINISHED = "FINISHED"  # completed, failed, cancelled, or forgotten
-UNKNOWN = "UNKNOWN"    # the scheduler could not be consulted
+class JobState(str, Enum):
+    """A scheduler's own live answer to "is this job still running".
+
+    Deliberately not merged with store.RowStatus: this answers a different
+    question ("what does the live queue say right now" vs. "what does
+    jobchain's own status file say"), and operations.doctor() exists
+    specifically to reconcile the two by hand when they disagree -- which
+    they legitimately can, e.g. a job that died before writing any status.
+
+    See RowStatus in store.py for why __str__/__format__ are overridden.
+    """
+
+    ALIVE = "ALIVE"        # queued, held, or running
+    FINISHED = "FINISHED"  # completed, failed, cancelled, or forgotten
+    UNKNOWN = "UNKNOWN"    # the scheduler could not be consulted
+
+    def __str__(self) -> str:
+        return str(self.value)
+
+    def __format__(self, spec: str) -> str:
+        return format(str(self.value), spec)
+
+
+# Back-compat module attributes; see RowStatus in store.py for why a str
+# mixin makes this a no-op change everywhere else.
+ALIVE = JobState.ALIVE
+FINISHED = JobState.FINISHED
+UNKNOWN = JobState.UNKNOWN
 
 _PBS_ALIVE_STATES = {"Q", "R", "H", "W", "T", "S", "B", "M"}
 _SLURM_ALIVE_STATES = {"PENDING", "RUNNING", "SUSPENDED", "COMPLETING",
@@ -50,25 +82,72 @@ class Submission:
     output: str = ""
 
 
-class Scheduler:
+class SchedulerBackend(ABC):
     """A workload manager this tool submits to.
 
     The scheduler is chosen by configuration, never detected. Detection would
     guess, and a wrong guess produces scripts whose directives the other
     scheduler silently ignores, so every job would run with no resources
     requested.
+
+    A subclass supplies exactly the parts that differ between schedulers
+    (command syntax, directive prefix, job-state parsing); everything about
+    *running* a submission -- subprocess execution, error handling, threading
+    dependencies through a pipeline -- is identical between schedulers and
+    lives here once.
     """
 
-    def __init__(self, kind: str = PBS):
-        kind = (kind or PBS).lower()
-        if kind not in (PBS, SLURM):
-            raise SchedulerError(f"unknown scheduler '{kind}'; expected pbs or slurm")
-        self.kind = kind
-        self.submit_binary = "qsub" if kind == PBS else "sbatch"
+    kind: ClassVar[str]
+    submit_binary: ClassVar[str]
+    #: How the chaining stage's self-submission pastes its KEY=VALUE
+    #: environment onto the command line: PBS wants it as a separate argv
+    #: word after "-v", so this carries a trailing space; Slurm glues it
+    #: onto "--export=ALL," with no space. The C and shell node helpers
+    #: read this (via write_facts) rather than knowing PBS/Slurm syntax
+    #: themselves, so this string -- not a helper-side branch -- is the one
+    #: place that knowledge lives.
+    export_flag: ClassVar[str]
+    #: The dependency flag's own prefix, e.g. "-W depend=" or
+    #: "--dependency="; the node helpers glue "<type>:<jobid>" onto it.
+    depend_flag: ClassVar[str]
+
+    # -- what a subclass supplies -----------------------------------------
 
     @property
+    @abstractmethod
     def directive_prefix(self) -> str:
-        return "#PBS" if self.kind == PBS else "#SBATCH"
+        """The per-line directive marker, e.g. ``#PBS`` or ``#SBATCH``."""
+
+    @property
+    @abstractmethod
+    def jobid_env_expr(self) -> str:
+        """Shell expression for this scheduler's own job-id variable."""
+
+    @abstractmethod
+    def build_submit_command(self, script_path: str, exported: str,
+                             depends_on: Optional[str],
+                             depends_type: str) -> List[str]:
+        """The full submit command line for one script."""
+
+    @abstractmethod
+    def parse_job_id(self, stdout: str) -> Optional[str]:
+        """Extract the job identifier from a submit command's output."""
+
+    @abstractmethod
+    def query_job_state(self, job_id: str) -> str:
+        """Consult the scheduler directly; ALIVE, FINISHED, or UNKNOWN."""
+
+    @abstractmethod
+    def cancel_command(self, job_id: str) -> List[str]:
+        """The command line that cancels one job."""
+
+    @abstractmethod
+    def render_directives(self, resources: Dict[str, Any], run_name: str,
+                          stage: str, row_name: str,
+                          log_dir: str) -> List[str]:
+        """Render this scheduler's resource directives for one script."""
+
+    # -- shared behavior, identical across schedulers ----------------------
 
     @property
     def available(self) -> bool:
@@ -81,23 +160,13 @@ class Scheduler:
                 f"submitted to {self.kind} from this host"
             )
 
-    # -- submission ------------------------------------------------------
-
     def submit(self, script_path: str, environment: Dict[str, str],
                depends_on: Optional[str] = None,
                depends_type: str = "afterok") -> Submission:
         """Submit one script, optionally dependent on another job."""
         exported = ",".join(f"{k}={v}" for k, v in sorted(environment.items()))
-        if self.kind == PBS:
-            command = [self.submit_binary]
-            if depends_on:
-                command += ["-W", f"depend={depends_type}:{depends_on}"]
-            command += ["-v", exported, script_path]
-        else:
-            command = [self.submit_binary]
-            if depends_on:
-                command += [f"--dependency={depends_type}:{depends_on}"]
-            command += [f"--export=ALL,{exported}", script_path]
+        command = self.build_submit_command(script_path, exported, depends_on,
+                                            depends_type)
 
         trace("submitting: %s", " ".join(command))
         try:
@@ -111,7 +180,7 @@ class Scheduler:
         if completed.returncode != 0:
             return Submission(job_id=None, success=False, command=command,
                               output=output)
-        return Submission(job_id=self._parse_job_id(completed.stdout),
+        return Submission(job_id=self.parse_job_id(completed.stdout),
                           success=True, command=command, output=output)
 
     def submit_pipeline(self, entries: Sequence[Tuple[str, str, str]],
@@ -137,27 +206,68 @@ class Scheduler:
             previous = submission.job_id
         return results
 
-    def _parse_job_id(self, stdout: str) -> Optional[str]:
-        """Extract the job identifier from a submit command's output."""
-        text = (stdout or "").strip()
-        if not text:
-            return None
-        if self.kind == PBS:
-            # qsub prints the identifier alone, but site prologues sometimes
-            # add banner lines, so the last non-empty line is the safer pick.
-            return text.splitlines()[-1].strip()
-        return text.split()[-1].strip()
-
-    # -- status ----------------------------------------------------------
-
     def job_state(self, job_id: str) -> str:
         if not job_id:
             return UNKNOWN
-        if self.kind == PBS:
-            return self._pbs_job_state(job_id)
-        return self._slurm_job_state(job_id)
+        return self.query_job_state(job_id)
 
-    def _pbs_job_state(self, job_id: str) -> str:
+    def cancel(self, job_id: str) -> Tuple[bool, str]:
+        command = self.cancel_command(job_id)
+        completed = _capture(command)
+        if completed is None:
+            return False, f"{command[0]} is not available on PATH"
+        output = ((completed.stdout or "") + (completed.stderr or "")).strip()
+        return completed.returncode == 0, output
+
+    def write_facts(self, home: str) -> None:
+        """Write this backend's submission syntax as small files under a run.
+
+        The compute-node helper (C or shell) self-chains the next row's
+        submission without a Python interpreter, so it cannot ask a
+        SchedulerBackend anything at run time. Rather than have the helper
+        re-derive qsub/sbatch syntax from an environment variable -- two
+        independent copies of scheduler knowledge, one per implementation --
+        it reads these facts instead. This is the only place PBS/Slurm
+        command syntax is expressed; claiming, marking, and self-submission
+        stay scheduler-agnostic everywhere else.
+        """
+        _write_text(os.path.join(home, "scheduler.submit_cmd"), self.submit_binary + "\n")
+        _write_text(os.path.join(home, "scheduler.export_flag"), self.export_flag + "\n")
+        _write_text(os.path.join(home, "scheduler.depend_flag"), self.depend_flag + "\n")
+
+
+class PBSBackend(SchedulerBackend):
+    kind = PBS
+    submit_binary = "qsub"
+    export_flag = "-v "
+    depend_flag = "-W depend="
+
+    @property
+    def directive_prefix(self) -> str:
+        return "#PBS"
+
+    @property
+    def jobid_env_expr(self) -> str:
+        return "${PBS_JOBID:-}"
+
+    def build_submit_command(self, script_path: str, exported: str,
+                             depends_on: Optional[str],
+                             depends_type: str) -> List[str]:
+        command = [self.submit_binary]
+        if depends_on:
+            command += ["-W", f"depend={depends_type}:{depends_on}"]
+        command += ["-v", exported, script_path]
+        return command
+
+    def parse_job_id(self, stdout: str) -> Optional[str]:
+        text = (stdout or "").strip()
+        if not text:
+            return None
+        # qsub prints the identifier alone, but site prologues sometimes
+        # add banner lines, so the last non-empty line is the safer pick.
+        return text.splitlines()[-1].strip()
+
+    def query_job_state(self, job_id: str) -> str:
         completed = _capture(["qstat", "-f", "-x", job_id])
         if completed is None:
             return UNKNOWN
@@ -172,7 +282,69 @@ class Scheduler:
                 return ALIVE if value.strip() in _PBS_ALIVE_STATES else FINISHED
         return FINISHED
 
-    def _slurm_job_state(self, job_id: str) -> str:
+    def cancel_command(self, job_id: str) -> List[str]:
+        return ["qdel", job_id]
+
+    def render_directives(self, resources: Dict[str, Any], run_name: str,
+                          stage: str, row_name: str,
+                          log_dir: str) -> List[str]:
+        prefix = self.directive_prefix
+        lines: List[str] = []
+        job_name = f"{run_name}-{stage}-{row_name}"
+
+        def value(key: str) -> Any:
+            result = resources.get(key)
+            return result if result not in (None, "", 0) else None
+
+        lines.append(f"{prefix} -N {job_name}")
+        select = [str(value("nodes") or 1)]
+        for key, label in (("ncpus", "ncpus"), ("mem", "mem"), ("ngpus", "ngpus")):
+            if value(key):
+                select.append(f"{label}={resources[key]}")
+        lines.append(f"{prefix} -l select=" + ":".join(select))
+        if value("walltime"):
+            lines.append(f"{prefix} -l walltime={resources['walltime']}")
+        if value("queue"):
+            lines.append(f"{prefix} -q {resources['queue']}")
+        if value("account"):
+            lines.append(f"{prefix} -A {resources['account']}")
+        lines.append(f"{prefix} -j oe")
+        lines.append(f"{prefix} -o {os.path.join(log_dir, stage + '.log')}")
+
+        _append_shared_directives(lines, prefix, resources)
+        return lines
+
+
+class SlurmBackend(SchedulerBackend):
+    kind = SLURM
+    submit_binary = "sbatch"
+    export_flag = "--export=ALL,"
+    depend_flag = "--dependency="
+
+    @property
+    def directive_prefix(self) -> str:
+        return "#SBATCH"
+
+    @property
+    def jobid_env_expr(self) -> str:
+        return "${SLURM_JOB_ID:-}"
+
+    def build_submit_command(self, script_path: str, exported: str,
+                             depends_on: Optional[str],
+                             depends_type: str) -> List[str]:
+        command = [self.submit_binary]
+        if depends_on:
+            command += [f"--dependency={depends_type}:{depends_on}"]
+        command += [f"--export=ALL,{exported}", script_path]
+        return command
+
+    def parse_job_id(self, stdout: str) -> Optional[str]:
+        text = (stdout or "").strip()
+        if not text:
+            return None
+        return text.split()[-1].strip()
+
+    def query_job_state(self, job_id: str) -> str:
         completed = _capture(["squeue", "-h", "-j", job_id, "-o", "%T"])
         if completed is not None and completed.returncode == 0:
             lines = completed.stdout.strip().splitlines()
@@ -185,27 +357,140 @@ class Scheduler:
         first = completed.stdout.strip().splitlines()[0].strip().upper()
         return ALIVE if first.split()[0] in _SLURM_ALIVE_STATES else FINISHED
 
-    # -- cancellation ----------------------------------------------------
+    def cancel_command(self, job_id: str) -> List[str]:
+        return ["scancel", job_id]
 
-    def cancel(self, job_id: str) -> Tuple[bool, str]:
-        command = ["qdel", job_id] if self.kind == PBS else ["scancel", job_id]
-        completed = _capture(command)
-        if completed is None:
-            return False, f"{command[0]} is not available on PATH"
-        output = ((completed.stdout or "") + (completed.stderr or "")).strip()
-        return completed.returncode == 0, output
+    def render_directives(self, resources: Dict[str, Any], run_name: str,
+                          stage: str, row_name: str,
+                          log_dir: str) -> List[str]:
+        prefix = self.directive_prefix
+        lines: List[str] = []
+        job_name = f"{run_name}-{stage}-{row_name}"
+
+        def value(key: str) -> Any:
+            result = resources.get(key)
+            return result if result not in (None, "", 0) else None
+
+        lines.append(f"{prefix} --job-name={job_name}")
+        if value("nodes"):
+            lines.append(f"{prefix} --nodes={resources['nodes']}")
+        if value("ncpus"):
+            lines.append(f"{prefix} --cpus-per-task={resources['ncpus']}")
+        if value("mem"):
+            lines.append(f"{prefix} --mem={resources['mem']}")
+        if value("ngpus"):
+            lines.append(f"{prefix} --gpus-per-node={resources['ngpus']}")
+        if value("walltime"):
+            lines.append(f"{prefix} --time={resources['walltime']}")
+        if value("queue"):
+            lines.append(f"{prefix} --partition={resources['queue']}")
+        if value("account"):
+            lines.append(f"{prefix} --account={resources['account']}")
+        lines.append(f"{prefix} --output={os.path.join(log_dir, stage + '-%j.log')}")
+
+        _append_shared_directives(lines, prefix, resources)
+        return lines
 
 
-class NullScheduler(Scheduler):
+def _append_shared_directives(lines: List[str], prefix: str,
+                              resources: Dict[str, Any]) -> None:
+    """Directives common to both schedulers: passthrough and env exports."""
+    # Site-specific directives pass through verbatim, so an option this tool
+    # does not model is never out of reach.
+    for extra in resources.get("extra_directives") or []:
+        lines.append(extra if str(extra).startswith("#") else f"{prefix} {extra}")
+
+    for key, value_text in sorted((resources.get("env") or {}).items()):
+        lines.append(f"export {key}='{value_text}'")
+
+
+_BACKENDS: Dict[str, type] = {PBS: PBSBackend, SLURM: SlurmBackend}
+
+
+def Scheduler(kind: str = PBS) -> SchedulerBackend:
+    """Build the scheduler backend for ``kind`` ("pbs" or "slurm").
+
+    Kept as a function, not a class, so every existing call site
+    (``Scheduler(config.scheduler)``) is unaffected by there being more than
+    one concrete backend underneath it.
+    """
+    kind = (kind or PBS).lower()
+    backend_cls = _BACKENDS.get(kind)
+    if backend_cls is None:
+        raise SchedulerError(f"unknown scheduler '{kind}'; expected pbs or slurm")
+    return backend_cls()
+
+
+def build_directives(resources: Dict[str, Any], scheduler: SchedulerBackend,
+                     run_name: str, stage: str, row_name: str,
+                     log_dir: str) -> List[str]:
+    """Deprecated: use ``scheduler.render_directives(...)`` directly.
+
+    Kept as a thin wrapper so existing callers of the old free-function form
+    are unaffected by directive rendering moving onto SchedulerBackend.
+    """
+    return scheduler.render_directives(resources, run_name, stage, row_name,
+                                       log_dir)
+
+
+class NullScheduler(SchedulerBackend):
     """A scheduler stand-in used by dry runs.
 
     Nothing is submitted and no external command is consulted, so a dry run
     behaves identically whether or not a scheduler client is installed.
+    Directive rendering and submit-command shape still need to match the
+    configured scheduler (so a dry run's preview is accurate), so this wraps
+    a real backend for those parts rather than reimplementing them.
     """
 
     def __init__(self, kind: str = PBS):
-        super().__init__(kind)
+        self._backend = Scheduler(kind)
         self._counter = 0
+
+    @property
+    def kind(self) -> str:  # type: ignore[override]
+        return self._backend.kind
+
+    @property
+    def submit_binary(self) -> str:  # type: ignore[override]
+        return self._backend.submit_binary
+
+    @property
+    def export_flag(self) -> str:  # type: ignore[override]
+        return self._backend.export_flag
+
+    @property
+    def depend_flag(self) -> str:  # type: ignore[override]
+        return self._backend.depend_flag
+
+    @property
+    def directive_prefix(self) -> str:
+        return self._backend.directive_prefix
+
+    @property
+    def jobid_env_expr(self) -> str:
+        return self._backend.jobid_env_expr
+
+    def build_submit_command(self, script_path: str, exported: str,
+                             depends_on: Optional[str],
+                             depends_type: str) -> List[str]:
+        return self._backend.build_submit_command(script_path, exported,
+                                                   depends_on, depends_type)
+
+    def parse_job_id(self, stdout: str) -> Optional[str]:
+        return self._backend.parse_job_id(stdout)
+
+    def query_job_state(self, job_id: str) -> str:
+        return UNKNOWN
+
+    def cancel_command(self, job_id: str) -> List[str]:
+        return self._backend.cancel_command(job_id)
+
+    def render_directives(self, resources: Dict[str, Any], run_name: str,
+                          stage: str, row_name: str,
+                          log_dir: str) -> List[str]:
+        return self._backend.render_directives(resources, run_name, stage,
+                                                row_name, log_dir)
 
     @property
     def available(self) -> bool:
@@ -264,7 +549,7 @@ class RunContext:
     The scheduler never sees it and it does not exist at job time.
     """
 
-    def __init__(self, name: str, home: str, scheduler: Scheduler,
+    def __init__(self, name: str, home: str, scheduler: SchedulerBackend,
                  node_binary: str, work_dir_template: str, log_dir_template: str):
         self.name = name
         self.home = home
@@ -349,13 +634,12 @@ class RowContext:
 
     def directives(self, resources: Dict[str, Any]) -> str:
         """Render resource directives for the active scheduler."""
-        return "\n".join(build_directives(
-            resources, self.run._scheduler, self.run.name, self.stage,
-            self.row_name, self.log_dir))
+        return "\n".join(self.run._scheduler.render_directives(
+            resources, self.run.name, self.stage, self.row_name, self.log_dir))
 
     def preamble(self) -> str:
         """Load the row's parameters and mark this stage running."""
-        jobid = "${PBS_JOBID:-}" if self.run.scheduler == PBS else "${SLURM_JOB_ID:-}"
+        jobid = self.run._scheduler.jobid_env_expr
         # JC_RUN is taken from the environment when jobchain supplied one,
         # and otherwise falls back to the generation this script was written
         # for. That is what lets a script be re-submitted at a later
@@ -393,7 +677,7 @@ class RowContext:
         running (the result of a shell computation, a command's output,
         etc.), use `emit_shell_expr` instead.
         """
-        return f'"$JC_NODE" emit --run "$JC_RUN" {key}={_shell_quote(value)}'
+        return f'"$JC_NODE" emit --run "$JC_RUN" {key}={shell_quote(value)}'
 
     def emit_shell_expr(self, key: str, shell_expr: str) -> str:
         """Publish a handoff value computed at run time by the shell.
@@ -457,66 +741,6 @@ class RowContext:
 # ---------------------------------------------------------------------------
 # Script generation
 # ---------------------------------------------------------------------------
-
-
-def build_directives(resources: Dict[str, Any], scheduler: Scheduler,
-                     run_name: str, stage: str, row_name: str,
-                     log_dir: str) -> List[str]:
-    """Render scheduler directives for one stage of one row.
-
-    Only resources with a value produce a directive, so anything unset falls
-    through to the site default.
-    """
-    prefix = scheduler.directive_prefix
-    lines: List[str] = []
-    job_name = f"{run_name}-{stage}-{row_name}"
-
-    def value(key: str) -> Any:
-        result = resources.get(key)
-        return result if result not in (None, "", 0) else None
-
-    if scheduler.kind == PBS:
-        lines.append(f"{prefix} -N {job_name}")
-        select = [str(value("nodes") or 1)]
-        for key, label in (("ncpus", "ncpus"), ("mem", "mem"), ("ngpus", "ngpus")):
-            if value(key):
-                select.append(f"{label}={resources[key]}")
-        lines.append(f"{prefix} -l select=" + ":".join(select))
-        if value("walltime"):
-            lines.append(f"{prefix} -l walltime={resources['walltime']}")
-        if value("queue"):
-            lines.append(f"{prefix} -q {resources['queue']}")
-        if value("account"):
-            lines.append(f"{prefix} -A {resources['account']}")
-        lines.append(f"{prefix} -j oe")
-        lines.append(f"{prefix} -o {os.path.join(log_dir, stage + '.log')}")
-    else:
-        lines.append(f"{prefix} --job-name={job_name}")
-        if value("nodes"):
-            lines.append(f"{prefix} --nodes={resources['nodes']}")
-        if value("ncpus"):
-            lines.append(f"{prefix} --cpus-per-task={resources['ncpus']}")
-        if value("mem"):
-            lines.append(f"{prefix} --mem={resources['mem']}")
-        if value("ngpus"):
-            lines.append(f"{prefix} --gpus-per-node={resources['ngpus']}")
-        if value("walltime"):
-            lines.append(f"{prefix} --time={resources['walltime']}")
-        if value("queue"):
-            lines.append(f"{prefix} --partition={resources['queue']}")
-        if value("account"):
-            lines.append(f"{prefix} --account={resources['account']}")
-        lines.append(f"{prefix} --output={os.path.join(log_dir, stage + '-%j.log')}")
-
-    # Site-specific directives pass through verbatim, so an option this tool
-    # does not model is never out of reach.
-    for extra in resources.get("extra_directives") or []:
-        lines.append(extra if str(extra).startswith("#") else f"{prefix} {extra}")
-
-    for key, value_text in sorted((resources.get("env") or {}).items()):
-        lines.append(f"export {key}='{value_text}'")
-
-    return lines
 
 
 def write_script(path: str, text: str) -> str:

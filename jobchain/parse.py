@@ -374,7 +374,7 @@ def scan(normalized: NormalizeResult, schema: Schema,
     )
 
     for index, (line_num, fields) in enumerate(normalized.rows):
-        report.rows.append(_scan_row(line_num, index, fields, schema))
+        report.rows.append(scan_row(line_num, index, fields, schema))
 
     _apply_file_validators(report, schema)
 
@@ -386,7 +386,7 @@ def scan(normalized: NormalizeResult, schema: Schema,
     return report
 
 
-def _scan_row(line_num: int, index: int, fields: Sequence[str],
+def scan_row(line_num: int, index: int, fields: Sequence[str],
               schema: Schema) -> RowResult:
     """Run the structural and field tiers over one row."""
     result = RowResult(line_num=line_num, index=index, raw_fields=list(fields))

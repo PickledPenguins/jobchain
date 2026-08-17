@@ -41,12 +41,12 @@ class TestMainAndParser(unittest.TestCase):
         )
 
     def test_main_without_command_prints_help(self):
-        with patch.object(cli, "configure_logging"):
+        with patch.object(cli.entry, "configure_logging"):
             self.assertEqual(cli.main([]), EXIT_USAGE)
 
     def test_main_dispatches_handler(self):
         handler = MagicMock(return_value=17)
-        with patch.dict(cli._HANDLERS, {"status": handler}), patch.object(cli, "configure_logging"):
+        with patch.dict(cli._HANDLERS, {"status": handler}), patch.object(cli.entry, "configure_logging"):
             result = cli.main(["status"])
         self.assertEqual(result, 17)
         handler.assert_called_once()
@@ -54,21 +54,21 @@ class TestMainAndParser(unittest.TestCase):
     def test_main_translates_jobchain_error(self):
         with patch.dict(
             cli._HANDLERS, {"status": MagicMock(side_effect=StateError("bad"))}
-        ), patch.object(cli, "configure_logging"), patch.object(cli, "get_logger") as logger:
+        ), patch.object(cli.entry, "configure_logging"), patch.object(cli.entry, "get_logger") as logger:
             self.assertEqual(cli.main(["status"]), StateError("bad").exit_code)
             logger.return_value.error.assert_called_once()
 
     def test_main_translates_keyboard_interrupt(self):
         with patch.dict(
             cli._HANDLERS, {"status": MagicMock(side_effect=KeyboardInterrupt)}
-        ), patch.object(cli, "configure_logging"), patch.object(cli, "get_logger") as logger:
+        ), patch.object(cli.entry, "configure_logging"), patch.object(cli.entry, "get_logger") as logger:
             self.assertEqual(cli.main(["status"]), EXIT_USAGE)
             logger.return_value.error.assert_called_once_with("interrupted")
 
     def test_main_translates_unexpected_exception(self):
         with patch.dict(
             cli._HANDLERS, {"status": MagicMock(side_effect=RuntimeError("boom"))}
-        ), patch.object(cli, "configure_logging"), patch.object(cli, "get_logger") as logger, patch(
+        ), patch.object(cli.entry, "configure_logging"), patch.object(cli.entry, "get_logger") as logger, patch(
             "traceback.print_exc"
         ) as trace:
             self.assertEqual(cli.main(["status"]), EXIT_INTERNAL)
@@ -129,10 +129,10 @@ class TestSharedHelpers(unittest.TestCase):
     def test_select_store_lists_ambiguous_runs(self):
         with patch.object(cli.Store, "discover_root", return_value="/r"), patch.object(
             cli.Store, "list_runs", return_value=["a", "b"]
-        ), patch.object(cli, "_run_summary", side_effect=lambda r, n: {"name": n}), patch.object(
+        ), patch.object(cli.support, "_run_summary", side_effect=lambda r, n: {"name": n}), patch.object(
             cli.report, "render_run_list", return_value=["runs"]
         ), patch.object(
-            cli, "_emit"
+            cli.support, "_emit"
         ) as emit, self.assertRaises(
             UsageError
         ):
@@ -142,7 +142,7 @@ class TestSharedHelpers(unittest.TestCase):
     def test_run_summary_handles_corrupt_run(self):
         store = MagicMock()
         store.load_rows.side_effect = StateError("bad")
-        with patch.object(cli, "Store", return_value=store):
+        with patch.object(cli.support, "Store", return_value=store):
             result = cli._run_summary("/r", "x")
         self.assertEqual(result["rows"], 0)
         self.assertEqual(result["started"], "-")
@@ -157,7 +157,7 @@ class TestSharedHelpers(unittest.TestCase):
         store = MagicMock()
         store.load_rows.return_value = rows
         store.load_config.return_value = {"created_at": "2026-08-14T10:00:00Z"}
-        with patch.object(cli, "Store", return_value=store), patch.object(
+        with patch.object(cli.support, "Store", return_value=store), patch.object(
             cli.report, "summarize", return_value={cli.DONE: 1, "failed": 1, "cancelled": 1}
         ):
             result = cli._run_summary("/r", "x")
@@ -171,9 +171,9 @@ class TestSharedHelpers(unittest.TestCase):
         prepared = SimpleNamespace(
             store=store, config=SimpleNamespace(scheduler="pbs", on_complete=None)
         )
-        with patch.object(cli, "_select_store", return_value=store), patch.object(
+        with patch.object(cli.support, "_select_store", return_value=store), patch.object(
             cli.operations, "open_run", return_value=prepared
-        ), patch.object(cli, "_attach_file_log"), patch.object(
+        ), patch.object(cli.support, "_attach_file_log"), patch.object(
             cli.operations, "check_completion"
         ) as complete, patch(
             "jobchain.scheduler.NullScheduler"
@@ -188,9 +188,9 @@ class TestSharedHelpers(unittest.TestCase):
         prepared = SimpleNamespace(
             store=store, config=SimpleNamespace(scheduler="pbs", on_complete="hook")
         )
-        with patch.object(cli, "_select_store", return_value=store), patch.object(
+        with patch.object(cli.support, "_select_store", return_value=store), patch.object(
             cli.operations, "open_run", return_value=prepared
-        ), patch.object(cli, "_attach_file_log"), patch.object(
+        ), patch.object(cli.support, "_attach_file_log"), patch.object(
             cli.operations, "check_completion"
         ) as complete:
             cli._open(ns(run_selector=None, dry_run=False))
@@ -250,7 +250,7 @@ class TestSharedHelpers(unittest.TestCase):
 
     def test_confirm_non_tty_refuses(self):
         with patch.object(cli.sys.stdin, "isatty", return_value=False), patch.object(
-            cli, "_emit"
+            cli.support, "_emit"
         ) as emit:
             self.assertFalse(cli._confirm("p", "x", False))
         emit.assert_called_once()
@@ -339,8 +339,8 @@ class TestRunRendering(unittest.TestCase):
             rows_invalid=0,
             exhausted=False,
         )
-        with patch.object(cli, "_emit") as emit, patch.object(
-            cli, "format_report", return_value=["report"]
+        with patch.object(cli.commands, "_emit") as emit, patch.object(
+            cli.commands, "format_report", return_value=["report"]
         ):
             self.assertEqual(cli._report_run(result, ns()), EXIT_OK)
             result.scan_report = SimpleNamespace(ok=False, rows=[])
@@ -357,7 +357,7 @@ class TestRunRendering(unittest.TestCase):
             rows_invalid=3,
             exhausted=False,
         )
-        with patch.object(cli, "_emit") as emit:
+        with patch.object(cli.commands, "_emit") as emit:
             self.assertEqual(cli._report_run(result, ns()), 7)
         text = "\n".join(emit.call_args.args[0])
         self.assertIn("generated 2", text)
@@ -374,7 +374,7 @@ class TestRunRendering(unittest.TestCase):
             rows_invalid=0,
             exhausted=True,
         )
-        with patch.object(cli, "_emit") as emit:
+        with patch.object(cli.commands, "_emit") as emit:
             self.assertEqual(cli._report_run(result, ns()), EXIT_OK)
         self.assertIn("no rows are available to claim", emit.call_args.args[0])
 
@@ -393,7 +393,7 @@ class TestRunRendering(unittest.TestCase):
         active = SimpleNamespace(is_terminal=False, current=1)
         store = MagicMock(name="r")
         store.load_rows.return_value = [finished, active]
-        with patch.object(cli, "_confirm", return_value=False) as confirm:
+        with patch.object(cli.commands, "_confirm", return_value=False) as confirm:
             self.assertFalse(cli._confirm_discard(store, False))
         self.assertIn("permanently deletes", confirm.call_args.args[0])
 
@@ -406,8 +406,8 @@ class TestStatusHelpers(unittest.TestCase):
     def test_status_all_json(self):
         with patch.object(cli.Store, "discover_root", return_value="/r"), patch.object(
             cli.Store, "list_runs", return_value=["a"]
-        ), patch.object(cli, "_run_summary", return_value={"name": "a"}), patch.object(
-            cli, "_emit_json"
+        ), patch.object(cli.commands, "_run_summary", return_value={"name": "a"}), patch.object(
+            cli.commands, "_emit_json"
         ) as emit:
             self.assertEqual(cli._status_all(ns(prune_after=None, as_json=True)), EXIT_OK)
         emit.assert_called_once()
@@ -415,14 +415,14 @@ class TestStatusHelpers(unittest.TestCase):
     def test_status_all_empty_text(self):
         with patch.object(cli.Store, "discover_root", return_value="/r"), patch.object(
             cli.Store, "list_runs", return_value=[]
-        ), patch.object(cli, "_emit") as emit:
+        ), patch.object(cli.commands, "_emit") as emit:
             self.assertEqual(cli._status_all(ns(prune_after=None, as_json=False)), EXIT_OK)
         self.assertIn("no runs exist", emit.call_args.args[0])
 
     def test_prune_json_without_yes_does_not_destroy(self):
         with patch.object(cli.os.path, "isfile", return_value=True), patch.object(
             cli.os.path, "getmtime", return_value=0
-        ), patch.object(cli, "Store") as store, patch.object(cli, "_emit_json") as emit:
+        ), patch.object(cli.commands, "Store") as store, patch.object(cli.commands, "_emit_json") as emit:
             self.assertEqual(cli._prune_runs("/r", ["a"], 1, False, True), EXIT_OK)
         store.assert_called_once_with(os.path.join("/r", "a"))
         store.return_value.destroy.assert_not_called()
@@ -430,7 +430,7 @@ class TestStatusHelpers(unittest.TestCase):
 
     def test_prune_text_no_eligible(self):
         with patch.object(cli.os.path, "isfile", return_value=False), patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ) as emit:
             self.assertEqual(cli._prune_runs("/r", ["a"], 1, False, False), EXIT_OK)
         self.assertIn("no runs", emit.call_args.args[0][0])
@@ -438,14 +438,14 @@ class TestStatusHelpers(unittest.TestCase):
     def test_prune_text_requires_yes(self):
         with patch.object(cli.os.path, "isfile", return_value=True), patch.object(
             cli.os.path, "getmtime", return_value=0
-        ), patch.object(cli, "_emit") as emit:
+        ), patch.object(cli.commands, "_emit") as emit:
             self.assertEqual(cli._prune_runs("/r", ["a"], 1, False, False), EXIT_USAGE)
         self.assertIn("nothing was removed", emit.call_args.args[0][-1])
 
     def test_prune_text_with_yes_destroys(self):
         with patch.object(cli.os.path, "isfile", return_value=True), patch.object(
             cli.os.path, "getmtime", return_value=0
-        ), patch.object(cli, "Store") as store, patch.object(cli, "_emit"):
+        ), patch.object(cli.commands, "Store") as store, patch.object(cli.commands, "_emit"):
             self.assertEqual(cli._prune_runs("/r", ["a"], 1, True, False), EXIT_OK)
         store.return_value.destroy.assert_called_once()
 
@@ -456,22 +456,22 @@ class TestShowAndOutput(unittest.TestCase):
             name="a", row_id="1", line_num=2, invalid_reasons=["bad"], valid=False
         )
         prepared = SimpleNamespace(store=MagicMock(load_rows=MagicMock(return_value=[row])))
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_emit_json"
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_emit_json"
         ) as emit:
             self.assertEqual(cli.cmd_show(ns(invalid=True, as_json=True)), EXIT_OK)
         self.assertEqual(emit.call_args.args[0][0]["row"], "a")
 
     def test_show_invalid_text(self):
         prepared = SimpleNamespace(store=MagicMock(load_rows=MagicMock(return_value=[])))
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.report, "render_invalid", return_value=["bad"]
-        ), patch.object(cli, "_emit") as emit:
+        ), patch.object(cli.commands, "_emit") as emit:
             self.assertEqual(cli.cmd_show(ns(invalid=True, as_json=False)), EXIT_OK)
         emit.assert_called_once_with(["bad"])
 
     def test_show_requires_row(self):
-        with patch.object(cli, "_open", return_value=SimpleNamespace(store=MagicMock())), self.assertRaises(UsageError):
+        with patch.object(cli.commands, "_open", return_value=SimpleNamespace(store=MagicMock())), self.assertRaises(UsageError):
             cli.cmd_show(ns(invalid=False, row=None))
 
     def test_show_paths_and_stages(self):
@@ -490,9 +490,9 @@ class TestShowAndOutput(unittest.TestCase):
         store = MagicMock(home="h")
         prepared = SimpleNamespace(store=store, schema=SimpleNamespace(unique_fields=[]))
         store.resolve_row.return_value = row
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.report, "render_show", return_value=["x"]
-        ) as render, patch.object(cli, "_emit"):
+        ) as render, patch.object(cli.commands, "_emit"):
             cli.cmd_show(
                 ns(
                     invalid=False,
@@ -512,9 +512,9 @@ class TestShowAndOutput(unittest.TestCase):
         store = MagicMock(home="h")
         prepared = SimpleNamespace(store=store, schema=SimpleNamespace(unique_fields=[]))
         store.resolve_row.return_value = row
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.report, "render_show", return_value=[]
-        ) as render, patch.object(cli, "_emit"):
+        ) as render, patch.object(cli.commands, "_emit"):
             cli.cmd_show(
                 ns(
                     invalid=False,
@@ -549,8 +549,8 @@ class TestShowAndOutput(unittest.TestCase):
         store = MagicMock(home="h")
         prepared = SimpleNamespace(store=store, schema=SimpleNamespace(unique_fields=[]))
         store.resolve_row.return_value = row
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_emit_json"
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_emit_json"
         ) as emit:
             cli.cmd_show(
                 ns(
@@ -575,7 +575,7 @@ class TestShowAndOutput(unittest.TestCase):
             path = os.path.join(logdir, "solve.out")
             with open(path, "w", encoding="utf-8") as handle:
                 handle.write("hello\n")
-            with patch.object(cli, "_emit") as emit:
+            with patch.object(cli.commands, "_emit") as emit:
                 self.assertEqual(cli._show_output(prepared, row, None), EXIT_OK)
             self.assertTrue(emit.called)
 
@@ -603,8 +603,8 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
         return SimpleNamespace(store=store, config=config, schema=SimpleNamespace(unique_fields=[]))
 
     def test_rerun_rejects_bad_assignment(self):
-        with patch.object(cli, "_open", return_value=self._prepared()), patch.object(
-            cli, "_resolve_rows", return_value=[]
+        with patch.object(cli.commands, "_open", return_value=self._prepared()), patch.object(
+            cli.commands, "_resolve_rows", return_value=[]
         ), self.assertRaises(UsageError):
             cli.cmd_rerun(
                 ns(
@@ -625,10 +625,10 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
     def test_rerun_completed_confirmation_declined(self):
         prepared = self._prepared()
         plan = SimpleNamespace(needs_confirmation=[(SimpleNamespace(row_id="1", name="a"), [])])
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_resolve_rows", return_value=[]
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_resolve_rows", return_value=[]
         ), patch.object(cli.operations, "plan_rerun", return_value=plan), patch.object(
-            cli, "_confirm", return_value=False
+            cli.commands, "_confirm", return_value=False
         ), self.assertRaises(ConflictError):
             cli.cmd_rerun(
                 ns(
@@ -649,12 +649,12 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
     def test_rerun_completed_confirmation_with_force_can_decline(self):
         prepared = self._prepared()
         plan = SimpleNamespace(needs_confirmation=[(SimpleNamespace(row_id="1", name="a"), [])])
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_resolve_rows", return_value=[]
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_resolve_rows", return_value=[]
         ), patch.object(cli.operations, "plan_rerun", return_value=plan), patch.object(
-            cli, "_confirm", return_value=False
+            cli.commands, "_confirm", return_value=False
         ), patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ):
             result = cli.cmd_rerun(
                 ns(
@@ -695,30 +695,30 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
             "fresh_handoff": True,
             "dry_run": False,
         }
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_resolve_rows", return_value=[]
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_resolve_rows", return_value=[]
         ), patch.object(cli.operations, "plan_rerun", return_value=plan), patch.object(
             cli.operations, "execute_rerun", return_value=result
         ), patch.object(
             cli.operations, "check_completion"
         ), patch.object(
-            cli, "_emit_json"
+            cli.commands, "_emit_json"
         ):
             self.assertEqual(cli.cmd_rerun(ns(**base, as_json=True)), EXIT_OK)
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_resolve_rows", return_value=[]
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_resolve_rows", return_value=[]
         ), patch.object(cli.operations, "plan_rerun", return_value=plan), patch.object(
             cli.operations, "execute_rerun", return_value=result
         ), patch.object(
             cli.operations, "check_completion"
         ), patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ):
             self.assertEqual(cli.cmd_rerun(ns(**base, as_json=False)), 7)
 
     def test_cancel_stop_only(self):
         prepared = self._prepared()
-        with patch.object(cli, "_open", return_value=prepared), patch.object(cli, "_emit") as emit:
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(cli.commands, "_emit") as emit:
             result = cli.cmd_cancel(
                 ns(stop=True, rows=[], statuses=[], all_rows=False, dry_run=False, as_json=False)
             )
@@ -729,10 +729,10 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
     def test_cancel_json(self):
         prepared = self._prepared()
         result = SimpleNamespace(cancelled=[("a", ["1"])], stopped=True, skipped=[])
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_resolve_rows", return_value=[]
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_resolve_rows", return_value=[]
         ), patch.object(cli.operations, "cancel", return_value=result), patch.object(
-            cli, "_emit_json"
+            cli.commands, "_emit_json"
         ) as emit:
             self.assertEqual(
                 cli.cmd_cancel(
@@ -753,10 +753,10 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
     def test_cancel_text_skipped_and_empty(self):
         prepared = self._prepared()
         result = SimpleNamespace(cancelled=[], stopped=False, skipped=[("a", "done")])
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_resolve_rows", return_value=[]
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_resolve_rows", return_value=[]
         ), patch.object(cli.operations, "cancel", return_value=result), patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ) as emit:
             cli.cmd_cancel(
                 ns(
@@ -772,7 +772,7 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
         self.assertIn("skipped", emit.call_args.args[0][0])
 
     def test_doctor_filesystem(self):
-        with patch.object(cli, "_check_filesystem", return_value=8) as check:
+        with patch.object(cli.commands, "_check_filesystem", return_value=8) as check:
             self.assertEqual(cli.cmd_doctor(ns(check_fs=True)), 8)
         check.assert_called_once()
 
@@ -793,9 +793,9 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
         ), patch.object(cli.operations, "open_run", return_value=MagicMock()), patch.object(
             cli.operations, "doctor", return_value=result
         ), patch.object(
-            cli, "_doctor_payload", return_value={"run": "r"}
+            cli.commands, "_doctor_payload", return_value={"run": "r"}
         ), patch.object(
-            cli, "_emit_json"
+            cli.commands, "_emit_json"
         ) as emit:
             self.assertEqual(
                 cli.cmd_doctor(
@@ -821,9 +821,9 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
             active_rows=0,
             pending_rows=0,
         )
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.operations, "doctor", return_value=result
-        ), patch.object(cli, "_render_doctor", return_value=["x"]), patch.object(cli, "_emit"):
+        ), patch.object(cli.commands, "_render_doctor", return_value=["x"]), patch.object(cli.commands, "_emit"):
             self.assertEqual(
                 cli.cmd_doctor(
                     ns(check_fs=False, all_runs=False, repair=False, dry_run=False, as_json=False)
@@ -861,14 +861,14 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
     def test_check_filesystem_json_success_and_text_failure(self):
         with patch.object(cli.Store, "discover_root", return_value="/r"), patch.object(
             cli.Store, "selftest", return_value=(True, "ok")
-        ), patch.object(cli.Store, "destroy"), patch.object(cli, "_emit_json") as emit:
+        ), patch.object(cli.Store, "destroy"), patch.object(cli.commands, "_emit_json") as emit:
             # Store is patched to an instance-like object below so root construction is observable.
             pass
         store = MagicMock()
         store.selftest.return_value = (True, "ok")
         with patch.object(cli.Store, "discover_root", return_value="/r"), patch.object(
-            cli, "Store", return_value=store
-        ), patch.object(cli, "_emit_json") as emit:
+            cli.commands, "Store", return_value=store
+        ), patch.object(cli.commands, "_emit_json") as emit:
             self.assertEqual(cli._check_filesystem(ns(as_json=True)), EXIT_OK)
         store.destroy.assert_called_once()
         self.assertTrue(emit.call_args.args[0]["ok"])
@@ -876,8 +876,8 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
     def test_logs_missing_and_json_and_follow(self):
         prepared = self._prepared()
         prepared.store.log_path = "/missing"
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_emit"
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_emit"
         ) as emit, patch.object(cli.os.path, "isfile", return_value=False):
             self.assertEqual(
                 cli.cmd_logs(ns(follow=False, level=None, stage=None, lines=40, as_json=False)),
@@ -891,8 +891,8 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
         self.addCleanup = lambda f: None
         prepared.store.log_path = path
         try:
-            with patch.object(cli, "_open", return_value=prepared), patch.object(
-                cli, "_emit_json"
+            with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+                cli.commands, "_emit_json"
             ) as emit:
                 cli.cmd_logs(
                     ns(follow=False, level="WARNING", stage="other", lines=1, as_json=True)
@@ -901,9 +901,9 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
         finally:
             os.unlink(path)
 
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.os.path, "isfile", return_value=True
-        ), patch.object(cli, "_follow", return_value=4):
+        ), patch.object(cli.commands, "_follow", return_value=4):
             self.assertEqual(
                 cli.cmd_logs(ns(follow=True, level=None, stage=None, lines=40, as_json=False)), 4
             )
@@ -917,17 +917,17 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
         prepared = SimpleNamespace(
             store=MagicMock(load_rows=MagicMock(return_value=[row])), schema=MagicMock()
         )
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.report, "build_views", return_value=[]
         ), patch.object(cli.report, "views_to_dicts", return_value=[{"x": 1}]), patch.object(
-            cli, "_emit_json"
+            cli.commands, "_emit_json"
         ) as emit:
             self.assertEqual(cli.cmd_export(ns(statuses=[], as_json=True, output=None)), EXIT_OK)
         emit.assert_called_once_with([{"x": 1}])
 
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.report, "export_rows", return_value=["a|b"]
-        ), patch.object(cli, "_emit") as emit:
+        ), patch.object(cli.commands, "_emit") as emit:
             self.assertEqual(cli.cmd_export(ns(statuses=[], as_json=False, output=None)), EXIT_OK)
         emit.assert_called_once_with(["a|b"])
 
@@ -935,9 +935,9 @@ class TestRerunCancelDoctorLogsExport(unittest.TestCase):
             path = f.name
         os.unlink(path)
         try:
-            with patch.object(cli, "_open", return_value=prepared), patch.object(
+            with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
                 cli.report, "export_rows", return_value=["a|b"]
-            ), patch.object(cli, "_emit") as emit:
+            ), patch.object(cli.commands, "_emit") as emit:
                 self.assertEqual(
                     cli.cmd_export(ns(statuses=[], as_json=False, output=path)), EXIT_OK
                 )
@@ -984,10 +984,10 @@ class TestCliRemainingBranches(unittest.TestCase):
         )
         store = MagicMock()
         store.exists.return_value = True
-        with patch.object(cli, "load_config", return_value=config), patch.object(
+        with patch.object(cli.commands, "load_config", return_value=config), patch.object(
             cli.Store, "discover_root", return_value="/root"
-        ), patch.object(cli, "Store", return_value=store), patch.object(
-            cli, "_confirm_discard", return_value=False
+        ), patch.object(cli.commands, "Store", return_value=store), patch.object(
+            cli.commands, "_confirm_discard", return_value=False
         ):
             self.assertEqual(cli.cmd_run(self._run_args(force=True)), EXIT_USAGE)
 
@@ -1015,20 +1015,20 @@ class TestCliRemainingBranches(unittest.TestCase):
             scan_report=None,
             exhausted=False,
         )
-        with patch.object(cli, "load_config", return_value=config), patch.object(
+        with patch.object(cli.commands, "load_config", return_value=config), patch.object(
             cli.Store, "discover_root", return_value="/root"
-        ), patch.object(cli, "Store", return_value=store), patch.object(
-            cli, "configure_logging"
+        ), patch.object(cli.commands, "Store", return_value=store), patch.object(
+            cli.commands, "configure_logging"
         ), patch.object(
-            cli, "_render_header", return_value=["header"]
+            cli.commands, "_render_header", return_value=["header"]
         ) as header, patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ), patch.object(
             cli.operations, "run", return_value=result
         ), patch.object(
             cli.operations, "check_completion"
         ) as complete, patch.object(
-            cli, "_report_run", return_value=EXIT_OK
+            cli.commands, "_report_run", return_value=EXIT_OK
         ) as report_run:
             self.assertEqual(cli.cmd_run(self._run_args()), EXIT_OK)
         header.assert_called_once()
@@ -1060,12 +1060,12 @@ class TestCliRemainingBranches(unittest.TestCase):
             scan_report=scan,
             exhausted=False,
         )
-        with patch.object(cli, "load_config", return_value=config), patch.object(
+        with patch.object(cli.commands, "load_config", return_value=config), patch.object(
             cli.Store, "discover_root", return_value="/root"
-        ), patch.object(cli, "Store", return_value=store), patch.object(
+        ), patch.object(cli.commands, "Store", return_value=store), patch.object(
             cli.operations, "run", return_value=result
         ), patch.object(
-            cli, "_emit_json"
+            cli.commands, "_emit_json"
         ) as emit:
             self.assertEqual(cli.cmd_run(self._run_args(as_json=True, check=True)), 3)
         self.assertFalse(emit.call_args.args[0]["scan"]["ok"])
@@ -1094,22 +1094,22 @@ class TestCliRemainingBranches(unittest.TestCase):
             scan_report=None,
             exhausted=False,
         )
-        with patch.object(cli, "load_config", return_value=config), patch.object(
+        with patch.object(cli.commands, "load_config", return_value=config), patch.object(
             cli.Store, "discover_root", return_value="/root"
-        ), patch.object(cli, "Store", return_value=store), patch.object(
-            cli, "configure_logging"
+        ), patch.object(cli.commands, "Store", return_value=store), patch.object(
+            cli.commands, "configure_logging"
         ), patch.object(
             cli.operations, "run", return_value=result
         ), patch.object(
             cli.operations, "check_completion"
         ), patch.object(
-            cli, "_emit_json"
+            cli.commands, "_emit_json"
         ) as emit:
             self.assertEqual(cli.cmd_run(self._run_args(as_json=True)), EXIT_OK)
         self.assertEqual(emit.call_args.args[0]["submitted"][0]["row"], "a")
 
     def test_cmd_status_all_dispatches(self):
-        with patch.object(cli, "_status_all", return_value=4) as status_all:
+        with patch.object(cli.commands, "_status_all", return_value=4) as status_all:
             self.assertEqual(cli.cmd_status(ns(all_runs=True)), 4)
         status_all.assert_called_once()
 
@@ -1125,7 +1125,7 @@ class TestCliRemainingBranches(unittest.TestCase):
             config=SimpleNamespace(description="desc"),
         )
         metrics = SimpleNamespace(live_chains=1, target_width=2)
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             store, "resolve_row", return_value=row
         ), patch.object(cli.report, "build_views", return_value=["v"]), patch.object(
             cli.report, "filter_views", return_value=["v"]
@@ -1134,9 +1134,9 @@ class TestCliRemainingBranches(unittest.TestCase):
         ), patch.object(
             cli.report, "compute_metrics", return_value=metrics
         ), patch.object(
-            cli, "_status_body", return_value=["body"]
+            cli.commands, "_status_body", return_value=["body"]
         ) as body, patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ) as emit:
             self.assertEqual(
                 cli.cmd_status(
@@ -1169,14 +1169,14 @@ class TestCliRemainingBranches(unittest.TestCase):
             config=SimpleNamespace(description=""),
         )
         metrics = SimpleNamespace(to_dict=lambda: {"x": 1}, live_chains=0, target_width=1)
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.report, "build_views", return_value=[]
         ), patch.object(cli.report, "filter_views", return_value=[]), patch.object(
             cli.report, "summarize", return_value={}
         ), patch.object(
             cli.report, "compute_metrics", return_value=metrics
         ), patch.object(
-            cli, "_emit_json"
+            cli.commands, "_emit_json"
         ) as emit:
             self.assertEqual(
                 cli.cmd_status(
@@ -1197,7 +1197,7 @@ class TestCliRemainingBranches(unittest.TestCase):
 
     def test_cmd_status_watch_dispatches(self):
         prepared = SimpleNamespace(store=MagicMock())
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.report, "build_views", return_value=[]
         ), patch.object(cli.report, "filter_views", return_value=[]), patch.object(
             cli.report, "summarize", return_value={}
@@ -1206,7 +1206,7 @@ class TestCliRemainingBranches(unittest.TestCase):
             "compute_metrics",
             return_value=SimpleNamespace(live_chains=0, target_width=1),
         ), patch.object(
-            cli, "_watch", return_value=9
+            cli.commands, "_watch", return_value=9
         ) as watch:
             # watch is reached after all normal status preparation.
             self.assertEqual(
@@ -1278,9 +1278,9 @@ class TestCliRemainingBranches(unittest.TestCase):
             "compute_metrics",
             return_value=SimpleNamespace(live_chains=0, target_width=1),
         ), patch.object(
-            cli, "_status_body", return_value=["body"]
+            cli.commands, "_status_body", return_value=["body"]
         ), patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ) as emit, patch.object(
             cli.sys.stdout, "write"
         ), patch.object(
@@ -1298,7 +1298,7 @@ class TestCliRemainingBranches(unittest.TestCase):
         store = MagicMock(name="store")
         store.load_rows.side_effect = KeyboardInterrupt
         prepared = SimpleNamespace(store=store, config=SimpleNamespace(description=""))
-        with patch.object(cli, "_emit") as emit:
+        with patch.object(cli.commands, "_emit") as emit:
             self.assertEqual(
                 cli._watch(
                     prepared, ns(statuses=None, stage=None, metrics=False, summary_only=False)
@@ -1310,7 +1310,7 @@ class TestCliRemainingBranches(unittest.TestCase):
     def test_prune_skips_recent_completed_run_and_prunes_json(self):
         with patch.object(cli.os.path, "isfile", return_value=True), patch.object(
             cli.os.path, "getmtime", return_value=10**12
-        ), patch.object(cli, "_emit_json") as emit:
+        ), patch.object(cli.commands, "_emit_json") as emit:
             self.assertEqual(cli._prune_runs("/r", ["a"], 100, True, True), EXIT_OK)
         self.assertFalse(emit.call_args.args[0]["eligible"])
 
@@ -1321,7 +1321,7 @@ class TestCliRemainingBranches(unittest.TestCase):
             with open(os.path.join(logdir, "solve.out"), "w") as h:
                 h.write("x")
             prepared = SimpleNamespace(store=SimpleNamespace(home=d))
-            with patch.object(cli, "_emit"):
+            with patch.object(cli.commands, "_emit"):
                 self.assertEqual(
                     cli._show_output(
                         prepared, SimpleNamespace(name="a", stage_reached="prep"), "solve"
@@ -1333,14 +1333,14 @@ class TestCliRemainingBranches(unittest.TestCase):
         prepared = SimpleNamespace(store=MagicMock(), config=SimpleNamespace(on_complete=None))
         plan = SimpleNamespace(needs_confirmation=[])
         result = SimpleNamespace(rows=[], regenerated=[], submitted=[], skipped=[], failures=[])
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_resolve_rows", return_value=[]
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_resolve_rows", return_value=[]
         ), patch.object(cli.operations, "plan_rerun", return_value=plan), patch.object(
             cli.operations, "execute_rerun", return_value=result
         ), patch.object(
             cli.operations, "check_completion"
         ), patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ) as emit:
             self.assertEqual(
                 cli.cmd_rerun(
@@ -1365,7 +1365,7 @@ class TestCliRemainingBranches(unittest.TestCase):
     def test_cancel_dry_run_stop_only_does_not_stop_store(self):
         prepared = SimpleNamespace(store=MagicMock(name="store"))
         prepared.store.name = "r"
-        with patch.object(cli, "_open", return_value=prepared), patch.object(cli, "_emit"):
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(cli.commands, "_emit"):
             self.assertEqual(
                 cli.cmd_cancel(
                     ns(stop=True, rows=[], statuses=[], all_rows=False, dry_run=True, as_json=False)
@@ -1377,10 +1377,10 @@ class TestCliRemainingBranches(unittest.TestCase):
     def test_cancel_text_reports_stopped(self):
         prepared = SimpleNamespace(store=MagicMock())
         result = SimpleNamespace(cancelled=[("a", ["1"])], skipped=[], stopped=True)
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_resolve_rows", return_value=[]
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_resolve_rows", return_value=[]
         ), patch.object(cli.operations, "cancel", return_value=result), patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ) as emit:
             cli.cmd_cancel(
                 ns(
@@ -1404,7 +1404,7 @@ class TestCliRemainingBranches(unittest.TestCase):
         ), patch.object(cli.operations, "open_run", return_value=MagicMock()), patch.object(
             cli.operations, "doctor", side_effect=[good, bad]
         ), patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ) as emit:
             self.assertEqual(
                 cli.cmd_doctor(
@@ -1417,7 +1417,7 @@ class TestCliRemainingBranches(unittest.TestCase):
     def test_doctor_all_no_runs_is_ok(self):
         with patch.object(cli.Store, "discover_root", return_value="/r"), patch.object(
             cli.Store, "list_runs", return_value=[]
-        ), patch.object(cli, "_emit") as emit:
+        ), patch.object(cli.commands, "_emit") as emit:
             self.assertEqual(
                 cli.cmd_doctor(
                     ns(check_fs=False, all_runs=True, repair=False, dry_run=False, as_json=False)
@@ -1431,8 +1431,8 @@ class TestCliRemainingBranches(unittest.TestCase):
         store = MagicMock()
         store.selftest.return_value = (False, "bad fs")
         with patch.object(cli.Store, "discover_root", return_value=None), patch.object(
-            cli, "Store", return_value=store
-        ), patch.object(cli, "_emit") as emit:
+            cli.commands, "Store", return_value=store
+        ), patch.object(cli.commands, "_emit") as emit:
             self.assertEqual(cli._check_filesystem(ns(as_json=False)), 8)
         self.assertIn("cannot safely host", emit.call_args.args[0][-1])
 
@@ -1440,8 +1440,8 @@ class TestCliRemainingBranches(unittest.TestCase):
         store = MagicMock()
         store.selftest.return_value = (False, "bad")
         with patch.object(cli.Store, "discover_root", return_value="/r"), patch.object(
-            cli, "Store", return_value=store
-        ), patch.object(cli, "_emit_json") as emit:
+            cli.commands, "Store", return_value=store
+        ), patch.object(cli.commands, "_emit_json") as emit:
             self.assertEqual(cli._check_filesystem(ns(as_json=True)), 8)
         self.assertFalse(emit.call_args.args[0]["ok"])
 
@@ -1452,8 +1452,8 @@ class TestCliRemainingBranches(unittest.TestCase):
             path = f.name
         prepared.store.log_path = path
         try:
-            with patch.object(cli, "_open", return_value=prepared), patch.object(
-                cli, "_emit"
+            with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+                cli.commands, "_emit"
             ) as emit:
                 self.assertEqual(
                     cli.cmd_logs(
@@ -1486,7 +1486,7 @@ class TestCliRemainingBranches(unittest.TestCase):
                 return False
 
         with patch("builtins.open", return_value=Handle()), patch.object(
-            cli, "time"
+            cli.commands, "time"
         ), patch.object(cli.sys.stdout, "flush"), patch("builtins.print") as print_:
             # matching returns the line once, then the handle interrupts.
             self.assertEqual(cli._follow("x", lambda lines: lines), EXIT_OK)
@@ -1517,9 +1517,9 @@ class TestCliRemainingBranches(unittest.TestCase):
         prepared = SimpleNamespace(
             store=MagicMock(load_rows=MagicMock(return_value=rows)), schema=MagicMock()
         )
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.report, "export_rows", return_value=["x"]
-        ) as export, patch.object(cli, "_emit"):
+        ) as export, patch.object(cli.commands, "_emit"):
             cli.cmd_export(ns(statuses=["fail"], as_json=False, output=None))
         export.assert_called_once_with(prepared.schema, [rows[1]])
 
@@ -1531,7 +1531,7 @@ class TestCliLastGaps(unittest.TestCase):
             config=SimpleNamespace(terminal_level="warning", file_level="debug"),
         )
         args = ns(verbose=2, log_level=None, file_log_level=None)
-        with patch.object(cli, "configure_logging") as configure:
+        with patch.object(cli.support, "configure_logging") as configure:
             cli._attach_file_log(prepared, args)
         configure.assert_called_once_with(
             verbosity=2, log_file="/run.log", terminal_level="warning", file_level="debug"
@@ -1540,7 +1540,7 @@ class TestCliLastGaps(unittest.TestCase):
     def test_status_all_delegates_to_prune(self):
         with patch.object(cli.Store, "discover_root", return_value="/r"), patch.object(
             cli.Store, "list_runs", return_value=["a"]
-        ), patch.object(cli, "_prune_runs", return_value=7) as prune:
+        ), patch.object(cli.commands, "_prune_runs", return_value=7) as prune:
             result = cli._status_all(ns(prune_after=3, yes=True, as_json=True))
         self.assertEqual(result, 7)
         prune.assert_called_once_with("/r", ["a"], 3, True, True)
@@ -1548,10 +1548,10 @@ class TestCliLastGaps(unittest.TestCase):
     def test_status_all_renders_run_list(self):
         with patch.object(cli.Store, "discover_root", return_value="/r"), patch.object(
             cli.Store, "list_runs", return_value=["a"]
-        ), patch.object(cli, "_run_summary", return_value={"name": "a"}), patch.object(
+        ), patch.object(cli.commands, "_run_summary", return_value={"name": "a"}), patch.object(
             cli.report, "render_run_list", return_value=["table"]
         ), patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ) as emit:
             self.assertEqual(
                 cli._status_all(ns(prune_after=None, yes=False, as_json=False)), EXIT_OK
@@ -1561,7 +1561,7 @@ class TestCliLastGaps(unittest.TestCase):
     def test_prune_json_yes_destroys_eligible_runs(self):
         with patch.object(cli.os.path, "isfile", return_value=True), patch.object(
             cli.os.path, "getmtime", return_value=0
-        ), patch.object(cli, "Store") as store, patch.object(cli, "_emit_json"):
+        ), patch.object(cli.commands, "Store") as store, patch.object(cli.commands, "_emit_json"):
             self.assertEqual(cli._prune_runs("/r", ["a", "b"], 1, True, True), EXIT_OK)
         self.assertEqual(store.return_value.destroy.call_count, 2)
 
@@ -1569,8 +1569,8 @@ class TestCliLastGaps(unittest.TestCase):
         prepared = SimpleNamespace(store=MagicMock(), schema=SimpleNamespace(unique_fields=[]))
         row = SimpleNamespace(name="a")
         prepared.store.resolve_row.return_value = row
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_show_output", return_value=12
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_show_output", return_value=12
         ) as output:
             result = cli.cmd_show(
                 ns(
@@ -1605,10 +1605,10 @@ class TestCliLastGaps(unittest.TestCase):
     def test_doctor_single_json_success(self):
         prepared = MagicMock()
         result = SimpleNamespace(ok=True)
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.operations, "doctor", return_value=result
-        ), patch.object(cli, "_doctor_payload", return_value={"ok": True}) as payload, patch.object(
-            cli, "_emit_json"
+        ), patch.object(cli.commands, "_doctor_payload", return_value={"ok": True}) as payload, patch.object(
+            cli.commands, "_emit_json"
         ) as emit:
             self.assertEqual(
                 cli.cmd_doctor(
@@ -1622,10 +1622,10 @@ class TestCliLastGaps(unittest.TestCase):
     def test_doctor_single_json_failure_without_repair(self):
         prepared = MagicMock()
         result = SimpleNamespace(ok=False)
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.operations, "doctor", return_value=result
-        ), patch.object(cli, "_doctor_payload", return_value={"ok": False}), patch.object(
-            cli, "_emit_json"
+        ), patch.object(cli.commands, "_doctor_payload", return_value={"ok": False}), patch.object(
+            cli.commands, "_emit_json"
         ):
             self.assertEqual(
                 cli.cmd_doctor(
@@ -1662,9 +1662,9 @@ class TestCliLastGaps(unittest.TestCase):
         ), patch.object(cli.report, "summarize", return_value={}), patch.object(
             cli.report, "compute_metrics", return_value=metrics
         ), patch.object(
-            cli, "_status_body", return_value=["body"]
+            cli.commands, "_status_body", return_value=["body"]
         ), patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ), patch.object(
             cli.sys.stdout, "write"
         ), patch.object(
@@ -1722,14 +1722,14 @@ class TestCliFinalBranches(unittest.TestCase):
             config=SimpleNamespace(description=""),
         )
         metrics = SimpleNamespace(live_chains=0, target_width=1)
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
             cli.report, "build_views", return_value=[]
         ), patch.object(cli.report, "filter_views", return_value=[]), patch.object(
             cli.report, "summarize", return_value={}
         ), patch.object(
             cli.report, "compute_metrics", return_value=metrics
         ), patch.object(
-            cli, "_emit_json"
+            cli.commands, "_emit_json"
         ) as emit:
             self.assertEqual(
                 cli.cmd_status(
@@ -1755,16 +1755,16 @@ class TestCliFinalBranches(unittest.TestCase):
         row = SimpleNamespace(row_id="1", name="a")
         plan = SimpleNamespace(needs_confirmation=[(row, [])])
         result = SimpleNamespace(rows=["a"], regenerated=[], submitted=[], skipped=[], failures=[])
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_resolve_rows", return_value=[]
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_resolve_rows", return_value=[]
         ), patch.object(cli.operations, "plan_rerun", return_value=plan), patch.object(
-            cli, "_confirm", return_value=True
+            cli.commands, "_confirm", return_value=True
         ) as confirm, patch.object(
             cli.operations, "execute_rerun", return_value=result
         ), patch.object(
             cli.operations, "check_completion"
         ), patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ):
             self.assertEqual(
                 cli.cmd_rerun(
@@ -1792,14 +1792,14 @@ class TestCliFinalBranches(unittest.TestCase):
         )
         plan = SimpleNamespace(needs_confirmation=[])
         result = SimpleNamespace(rows=["a"], regenerated=[], submitted=[], skipped=[], failures=[])
-        with patch.object(cli, "_open", return_value=prepared), patch.object(
-            cli, "_resolve_rows", return_value=[]
+        with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+            cli.commands, "_resolve_rows", return_value=[]
         ), patch.object(cli.operations, "plan_rerun", return_value=plan), patch.object(
             cli.operations, "execute_rerun", return_value=result
         ), patch.object(
             cli.operations, "check_completion"
         ) as complete, patch.object(
-            cli, "_emit"
+            cli.commands, "_emit"
         ):
             self.assertEqual(
                 cli.cmd_rerun(
@@ -1828,8 +1828,8 @@ class TestCliFinalBranches(unittest.TestCase):
             path = f.name
         prepared.store.log_path = path
         try:
-            with patch.object(cli, "_open", return_value=prepared), patch.object(
-                cli, "_emit"
+            with patch.object(cli.commands, "_open", return_value=prepared), patch.object(
+                cli.commands, "_emit"
             ) as emit:
                 self.assertEqual(
                     cli.cmd_logs(ns(follow=False, level=None, stage=None, lines=1, as_json=False)),

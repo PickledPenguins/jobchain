@@ -25,6 +25,7 @@ from .store import (
     CANCELLED,
     DONE,
     FAILED,
+    INVALID,
     PENDING,
     QUEUED,
     RUNNING,
@@ -34,8 +35,16 @@ from .store import (
 
 _TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
+#: Report-only bucket labels _category() collapses composite detail statuses
+#: into (e.g. "failed.<stage>.<code>", "cancelled.<reason>"). Deliberately
+#: lowercase and distinct from store.RowStatus -- this is the CLI/JSON
+#: summary contract (see cli.py's --status filter), not a typo: a RowStatus
+#: is what one stage's status file says; these are what a summary counts.
+CATEGORY_FAILED = "failed"
+CATEGORY_CANCELLED = "cancelled"
+
 #: Order statuses appear in summaries, from earliest lifecycle stage onward.
-STATUS_ORDER = [PENDING, QUEUED, RUNNING, DONE, "failed", "cancelled", "INVALID"]
+STATUS_ORDER = [PENDING, QUEUED, RUNNING, DONE, CATEGORY_FAILED, CATEGORY_CANCELLED, INVALID]
 
 
 @dataclass
@@ -202,11 +211,11 @@ def summarize(rows: Sequence[RowState]) -> Dict[str, int]:
 def _category(status: str) -> str:
     """Reduce a detailed status to the bucket a summary counts."""
     if status.startswith("failed.validation"):
-        return "INVALID"
+        return INVALID
     if status.startswith("failed."):
-        return "failed"
+        return CATEGORY_FAILED
     if status.startswith("cancelled."):
-        return "cancelled"
+        return CATEGORY_CANCELLED
     return status
 
 

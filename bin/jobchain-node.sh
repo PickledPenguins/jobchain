@@ -32,15 +32,6 @@ JC_EXIT_NONE_AVAILABLE=3
 JC_EXIT_STATE=6
 JC_EXIT_IO=8
 
-# Which scheduler to submit to. jobchain exports JC_SCHEDULER into every
-# generated script's environment (see RowContext.preamble), so the
-# self-chaining submission at the end of a job always matches the run's
-# configured scheduler. JOBCHAIN_SCHEDULER remains as a fallback for the
-# helper invoked directly, outside a generated script (a manual `claim`
-# or `mark` call from a shell with no JC_SCHEDULER of its own). PBS is the
-# ultimate default, matching the tool itself.
-JC_SCHEDULER="${JC_SCHEDULER:-${JOBCHAIN_SCHEDULER:-pbs}}"
-
 usage() {
     cat >&2 <<'EOF'
 jobchain-node (shell) - compute-node helper for jobchain
@@ -282,42 +273,50 @@ submit_row() {
         return $JC_EXIT_STATE
     fi
 
-    if [ "$JC_SCHEDULER" = "slurm" ]; then
-        submit_cmd="sbatch"
-        depend_flag="--dependency="
-    else
-        submit_cmd="qsub"
-        depend_flag="-W depend="
-    fi
+    # Which scheduler to submit to. This helper never branches on PBS vs
+    # Slurm by name: jobchain writes these three facts under the run's home
+    # directory when it prepares the run (SchedulerBackend.write_facts, in
+    # scheduler.py), and this just reads them back. That keeps qsub/sbatch
+    # syntax expressed in exactly one place -- the Python backends -- rather
+    # than duplicated into this shell helper and the compiled one
+    # independently.
+    submit_cmd=$(cat "$home/scheduler.submit_cmd" 2>/dev/null) &&
+    export_flag=$(cat "$home/scheduler.export_flag" 2>/dev/null) &&
+    depend_flag=$(cat "$home/scheduler.depend_flag" 2>/dev/null) || {
+        error "could not read scheduler facts under $home; was this run prepared by jobchain?"
+        return $JC_EXIT_STATE
+    }
 
     previous=""
     while IFS="$(printf '\t')" read -r stage depends script; do
         [ -z "$stage" ] && continue
         environment="JC_HOME=$home,JC_ROW=$row,JC_RUN=$run_dir,JC_CHAIN=1"
 
-        # PBS's -v and Slurm's --export=ALL, take their KEY=VALUE list
-        # differently: qsub wants it as a separate argv word after -v,
-        # while sbatch wants it glued onto --export= as one word. Building
-        # both cases explicitly, rather than gluing a flag string onto the
-        # value unconditionally, keeps each submission command's argv
-        # exactly what that scheduler expects -- a glued "-v KEY=VALUE"
-        # passed as one quoted shell word is not the same as -v and
-        # KEY=VALUE as two words, and only the latter is what qsub parses.
-        if [ "$JC_SCHEDULER" = "slurm" ]; then
-            if [ -n "$previous" ] && [ "$depends" != "-" ]; then
-                output=$($submit_cmd "$depend_flag$depends:$previous" \
-                         "--export=ALL,$environment" "$script" 2>&1)
-            else
-                output=$($submit_cmd "--export=ALL,$environment" "$script" 2>&1)
-            fi
-        else
-            if [ -n "$previous" ] && [ "$depends" != "-" ]; then
-                output=$($submit_cmd "$depend_flag$depends:$previous" \
-                         -v "$environment" "$script" 2>&1)
-            else
-                output=$($submit_cmd -v "$environment" "$script" 2>&1)
-            fi
-        fi
+        # A flag ending in a space (PBS's "-v ") wants its KEY=VALUE list as
+        # a separate argv word; one that doesn't (Slurm's "--export=ALL,")
+        # wants it glued on as a single word. Passing environment as one
+        # quoted shell word either way -- rather than gluing the flag onto
+        # it and letting the shell re-split the result -- keeps this safe
+        # against a JC_HOME containing a space, unlike relying on word
+        # splitting the way the compiled helper's popen() command can.
+        case "$export_flag" in
+            *\ )
+                if [ -n "$previous" ] && [ "$depends" != "-" ]; then
+                    output=$($submit_cmd "$depend_flag$depends:$previous" \
+                             "${export_flag% }" "$environment" "$script" 2>&1)
+                else
+                    output=$($submit_cmd "${export_flag% }" "$environment" "$script" 2>&1)
+                fi
+                ;;
+            *)
+                if [ -n "$previous" ] && [ "$depends" != "-" ]; then
+                    output=$($submit_cmd "$depend_flag$depends:$previous" \
+                             "$export_flag$environment" "$script" 2>&1)
+                else
+                    output=$($submit_cmd "$export_flag$environment" "$script" 2>&1)
+                fi
+                ;;
+        esac
         if [ $? -ne 0 ]; then
             error "submission of stage $stage failed: $output"
             cmd_mark --run "$run_dir" --stage "$stage" --status FAILED \

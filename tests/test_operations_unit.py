@@ -772,12 +772,12 @@ class TestRunLoadingAndLifecycle(unittest.TestCase):
             log_dir_template="{run.home}/logs",
             home=lambda root=None: os.path.join(root or "/tmp", "r"),
         )
-        with patch("jobchain.operations.load_schema_source") as load_schema, patch(
-            "jobchain.operations.Store"
-        ) as store_cls, patch("jobchain.operations.single_job_pipeline") as single, patch(
-            "jobchain.operations.Scheduler"
+        with patch("jobchain.operations.lifecycle.load_schema_source") as load_schema, patch(
+            "jobchain.operations.lifecycle.Store"
+        ) as store_cls, patch("jobchain.operations.lifecycle.single_job_pipeline") as single, patch(
+            "jobchain.operations.lifecycle.Scheduler"
         ) as scheduler_cls, patch(
-            "jobchain.operations.RunContext"
+            "jobchain.operations.lifecycle.RunContext"
         ) as context_cls:
             schema = SimpleNamespace(fields=[], name="s")
             pipeline = Mock(spec=["construct"])
@@ -804,14 +804,14 @@ class TestRunLoadingAndLifecycle(unittest.TestCase):
             home=lambda root=None: os.path.join(root or "/tmp", "r"),
         )
         with patch(
-            "jobchain.operations.load_schema_source",
+            "jobchain.operations.lifecycle.load_schema_source",
             return_value=SimpleNamespace(fields=[], name="s"),
-        ), patch("jobchain.operations.load_pipeline_source", return_value=Mock()), patch(
-            "jobchain.operations.Store"
+        ), patch("jobchain.operations.lifecycle.load_pipeline_source", return_value=Mock()), patch(
+            "jobchain.operations.lifecycle.Store"
         ) as store_cls, patch(
-            "jobchain.operations.NullScheduler"
+            "jobchain.operations.lifecycle.NullScheduler"
         ) as null_cls, patch(
-            "jobchain.operations.RunContext"
+            "jobchain.operations.lifecycle.RunContext"
         ) as context_cls:
             store_cls.return_value.home = "/tmp/r"
             context_cls.return_value = Mock()
@@ -832,9 +832,9 @@ class TestRunLoadingAndLifecycle(unittest.TestCase):
         report = SimpleNamespace(invalid_rows=[], valid_rows=[1])
         prepared = SimpleNamespace(store=Mock(), schema=Mock(), pipeline=Mock(), config=Mock())
         prepared.store.exists.return_value = False
-        with patch("jobchain.operations.prepare", return_value=prepared), patch(
-            "jobchain.operations._validate_only", return_value=report
-        ), patch("jobchain.operations._submit_chains") as submit:
+        with patch("jobchain.operations.lifecycle.prepare", return_value=prepared), patch(
+            "jobchain.operations.lifecycle._validate_only", return_value=report
+        ), patch("jobchain.operations.lifecycle._submit_chains") as submit:
             result = run(Mock(), check_only=True)
         self.assertEqual(result.phase, "check")
         submit.assert_not_called()
@@ -845,9 +845,9 @@ class TestRunLoadingAndLifecycle(unittest.TestCase):
         prepared = SimpleNamespace(store=Mock(), config=SimpleNamespace(width=1), scheduler=Mock())
         prepared.store.exists.return_value = True
         fresh = RunResult(store=prepared.store)
-        with patch("jobchain.operations.prepare", return_value=prepared), patch(
-            "jobchain.operations._prepare_fresh", return_value=fresh
-        ), patch("jobchain.operations._submit_chains"):
+        with patch("jobchain.operations.lifecycle.prepare", return_value=prepared), patch(
+            "jobchain.operations.lifecycle._prepare_fresh", return_value=fresh
+        ), patch("jobchain.operations.lifecycle._submit_chains"):
             run(Mock(), force=True, no_submit=True)
         prepared.store.destroy.assert_called_once()
 
@@ -857,8 +857,8 @@ class TestRunLoadingAndLifecycle(unittest.TestCase):
         prepared = SimpleNamespace(store=Mock(), config=SimpleNamespace(width=1), scheduler=Mock())
         prepared.store.exists.return_value = False
         fresh = RunResult(store=prepared.store)
-        with patch("jobchain.operations.prepare", return_value=prepared), patch(
-            "jobchain.operations._prepare_fresh", return_value=fresh
+        with patch("jobchain.operations.lifecycle.prepare", return_value=prepared), patch(
+            "jobchain.operations.lifecycle._prepare_fresh", return_value=fresh
         ):
             result = run(Mock(), no_submit=True)
         self.assertEqual(result.phase, "prepared")
@@ -927,7 +927,7 @@ class TestRunAndExistingBranches(unittest.TestCase):
         store.require.return_value = None
         with patch("jobchain.operations.os.path.isfile", return_value=True), patch(
             "jobchain.config.load_config", return_value=Mock()
-        ), patch("jobchain.operations.prepare") as prepare:
+        ), patch("jobchain.operations.lifecycle.prepare") as prepare:
             prepared = SimpleNamespace(store=Mock(), run_context=Mock())
             prepare.return_value = prepared
             from jobchain.operations import open_run
@@ -941,9 +941,9 @@ class TestRunAndExistingBranches(unittest.TestCase):
         prepared.store.exists.return_value = False
         prepared.scheduler.require_available.return_value = None
         fresh = RunResult(store=prepared.store)
-        with patch("jobchain.operations.prepare", return_value=prepared), patch(
-            "jobchain.operations._prepare_fresh", return_value=fresh
-        ), patch("jobchain.operations._submit_chains") as submit:
+        with patch("jobchain.operations.lifecycle.prepare", return_value=prepared), patch(
+            "jobchain.operations.lifecycle._prepare_fresh", return_value=fresh
+        ), patch("jobchain.operations.lifecycle._submit_chains") as submit:
             result = run(SimpleNamespace(width=2), no_submit=False)
         self.assertEqual(result.phase, "submitted")
         submit.assert_called_once_with(prepared, 2, fresh)
@@ -953,9 +953,9 @@ class TestRunAndExistingBranches(unittest.TestCase):
         prepared.store.exists.return_value = True
         prepared.store.load_rows.return_value = []
         prepared.store.load_config.return_value = {"width": 2}
-        with patch("jobchain.operations.prepare", return_value=prepared), patch(
-            "jobchain.operations._check_inputs_unchanged"
-        ), patch("jobchain.operations._submit_chains") as submit:
+        with patch("jobchain.operations.lifecycle.prepare", return_value=prepared), patch(
+            "jobchain.operations.lifecycle._check_inputs_unchanged"
+        ), patch("jobchain.operations.lifecycle._submit_chains") as submit:
             result = run(Mock())
         self.assertEqual(result.phase, "submitted")
         submit.assert_called_once()
@@ -964,7 +964,7 @@ class TestRunAndExistingBranches(unittest.TestCase):
         prepared = SimpleNamespace(store=Mock(), config=SimpleNamespace(width=1), scheduler=Mock())
         prepared.store.load_rows.return_value = []
         prepared.store.load_config.return_value = {"width": 1}
-        with patch("jobchain.operations._submit_chains") as submit:
+        with patch("jobchain.operations.lifecycle._submit_chains") as submit:
             result = _continue_existing(prepared, False, False, True, False, None)
         prepared.store.resume.assert_called_once()
         self.assertEqual(result.phase, "submitted")
@@ -973,7 +973,7 @@ class TestRunAndExistingBranches(unittest.TestCase):
     def test_continue_existing_no_submit_returns_prepared_for_unclaimed(self):
         prepared = SimpleNamespace(store=Mock(), config=SimpleNamespace(width=1), scheduler=Mock())
         prepared.store.load_rows.return_value = []
-        with patch("jobchain.operations._submit_chains") as submit:
+        with patch("jobchain.operations.lifecycle._submit_chains") as submit:
             result = _continue_existing(prepared, False, False, False, True, None)
         self.assertEqual(result.phase, "prepared")
         submit.assert_not_called()
@@ -982,7 +982,7 @@ class TestRunAndExistingBranches(unittest.TestCase):
         prepared = SimpleNamespace(store=Mock(), config=SimpleNamespace(width=1), scheduler=Mock())
         prepared.store.load_rows.return_value = []
         RunResult(store=prepared.store)
-        with patch("jobchain.operations._generate_scripts") as generate:
+        with patch("jobchain.operations.lifecycle._generate_scripts") as generate:
             generate.return_value = None
             out = _continue_existing(prepared, False, True, False, True, None)
         self.assertEqual(out.phase, "regenerated")
@@ -1018,7 +1018,7 @@ class TestSubmissionBranches(unittest.TestCase):
         prepared = self._prepared()
         prepared.store.claim.return_value = ("r1", "/tmp/r1")
         prepared.store.load_config.return_value = {"max_in_flight": 0}
-        with patch("jobchain.operations._submit_row", return_value=([], "bad")):
+        with patch("jobchain.operations.submit._submit_row", return_value=([], "bad")):
             result = RunResult(store=prepared.store)
             _submit_chains(prepared, 1, result)
         self.assertEqual(result.failures, [("r1", "bad")])
@@ -1066,6 +1066,7 @@ class TestPrepareFreshBranches(unittest.TestCase):
             schema=SimpleNamespace(name="s", fields=[], unique_fields=[]),
             pipeline=SimpleNamespace(name="p", specs=[], chaining_stage=None, stage_names=[]),
             store=Mock(),
+            scheduler=Mock(),
         )
         prepared.store.home = "/tmp/r"
         report = SimpleNamespace(
@@ -1075,8 +1076,8 @@ class TestPrepareFreshBranches(unittest.TestCase):
             rows=[1],
         )
         normalized = SimpleNamespace(rows=[1], changed_count=0, skipped_blank=0, skipped_comment=0)
-        with patch("jobchain.operations.normalize_file", return_value=normalized), patch(
-            "jobchain.operations.scan", return_value=report
+        with patch("jobchain.operations.lifecycle.normalize_file", return_value=normalized), patch(
+            "jobchain.operations.lifecycle.scan", return_value=report
         ), self.assertRaises(DataError):
             _prepare_fresh(prepared)
         prepared.store.create.assert_not_called()
@@ -1107,8 +1108,8 @@ class TestScriptGenerationBranches(unittest.TestCase):
             run_context=Mock(),
         )
         row = RowState("r", "r", 1, 0, {}, 1, valid=True)
-        with patch("jobchain.operations._context_for", return_value=Mock()), patch(
-            "jobchain.operations.verify_script", return_value="not executable"
+        with patch("jobchain.operations.lifecycle._context_for", return_value=Mock()), patch(
+            "jobchain.operations.lifecycle.verify_script", return_value="not executable"
         ), self.assertRaises(DataError):
             _generate_scripts(prepared, [row], RunResult(store=prepared.store))
 
@@ -1124,7 +1125,7 @@ class TestScriptGenerationBranches(unittest.TestCase):
             run_context=Mock(),
         )
         row = RowState("r", "r", 1, 0, {}, 1, valid=True)
-        with patch("jobchain.operations._context_for", return_value=Mock()), self.assertRaises(DataError):
+        with patch("jobchain.operations.lifecycle._context_for", return_value=Mock()), self.assertRaises(DataError):
             _generate_scripts(prepared, [row], RunResult(store=prepared.store))
 
 
@@ -1144,14 +1145,14 @@ class TestOperationsRemaining(unittest.TestCase):
             valid_rows=[],
         )
         with patch(
-            "jobchain.operations.normalize_file",
+            "jobchain.operations.lifecycle.normalize_file",
             return_value=SimpleNamespace(
                 rows=[], changed_count=0, skipped_blank=0, skipped_comment=0
             ),
-        ), patch("jobchain.operations.scan", return_value=report), patch(
-            "jobchain.operations._digest", return_value="d"
+        ), patch("jobchain.operations.lifecycle.scan", return_value=report), patch(
+            "jobchain.operations.lifecycle._digest", return_value="d"
         ), patch(
-            "jobchain.operations.log_startup_summary"
+            "jobchain.operations.lifecycle.log_startup_summary"
         ), self.assertRaises(DataError):
             _prepare_fresh(prepared)
         store.create.assert_not_called()
@@ -1194,7 +1195,7 @@ class TestOperationsRemaining(unittest.TestCase):
         config = SimpleNamespace(max_in_flight=1)
         prepared = SimpleNamespace(store=store, config=config)
         result = RunResult(store=store)
-        with patch("jobchain.operations._submit_row") as submit:
+        with patch("jobchain.operations.submit._submit_row") as submit:
             _submit_chains(prepared, 2, result)
         self.assertFalse(result.exhausted)
         submit.assert_not_called()
@@ -1206,7 +1207,7 @@ class TestOperationsRemaining(unittest.TestCase):
         store.claim.return_value = ("r", "run")
         prepared = SimpleNamespace(store=store, config=SimpleNamespace(max_in_flight=0))
         result = RunResult(store=store)
-        with patch("jobchain.operations._submit_row", return_value=([], "bad")):
+        with patch("jobchain.operations.submit._submit_row", return_value=([], "bad")):
             _submit_chains(prepared, 1, result)
         self.assertEqual(result.failures, [("r", "bad")])
 
@@ -1223,9 +1224,9 @@ class TestOperationsRemaining(unittest.TestCase):
         )
         plan = RerunPlan(rows=[row], new_generation=True, stages=["s"])
         SimpleNamespace(rows=[], regenerated=0, submitted=[], failures=[], skipped=[])
-        with patch("jobchain.operations._apply_changes"), patch(
-            "jobchain.operations._regenerate_row", return_value=1
-        ), patch("jobchain.operations._submit_selected", return_value=([], "bad")):
+        with patch("jobchain.operations.rerun._apply_changes"), patch(
+            "jobchain.operations.rerun._regenerate_row", return_value=1
+        ), patch("jobchain.operations.rerun._submit_selected", return_value=([], "bad")):
             out = execute_rerun(prepared, plan, assignments={"a": "2"}, regenerate=True, chain=True)
         self.assertEqual(out.regenerated, 1)
         self.assertEqual(out.failures, [("r", "bad")])
@@ -1235,8 +1236,8 @@ class TestOperationsRemaining(unittest.TestCase):
         store = MagicMock()
         prepared = SimpleNamespace(store=store)
         plan = RerunPlan(rows=[row], new_generation=True)
-        with patch("jobchain.operations._apply_changes") as change, patch(
-            "jobchain.operations._submit_selected"
+        with patch("jobchain.operations.rerun._apply_changes") as change, patch(
+            "jobchain.operations.rerun._submit_selected"
         ) as submit:
             out = execute_rerun(prepared, plan, dry_run=True)
         self.assertEqual(out.rows, ["r"])
@@ -1270,8 +1271,8 @@ class TestOperationsRemaining(unittest.TestCase):
         prepared = SimpleNamespace(
             store=store, scheduler=scheduler, config=SimpleNamespace(params_path="p")
         )
-        with patch("jobchain.operations._check_params_digest"), patch(
-            "jobchain.operations._submit_chains"
+        with patch("jobchain.operations.reconcile._check_params_digest"), patch(
+            "jobchain.operations.reconcile._submit_chains"
         ) as submit:
             result = doctor(prepared, repair=False, dry_run=False)
         self.assertEqual(result.live_chains, 1)
@@ -1293,7 +1294,7 @@ class TestOperationsRemaining(unittest.TestCase):
         prepared = SimpleNamespace(
             store=store, scheduler=scheduler, config=SimpleNamespace(params_path="p")
         )
-        with patch("jobchain.operations._check_params_digest"):
+        with patch("jobchain.operations.reconcile._check_params_digest"):
             result = doctor(prepared, repair=True, dry_run=False)
         self.assertTrue(result.findings[0].repaired)
         store.mark.assert_called()
@@ -1309,7 +1310,7 @@ class TestOperationsRemaining(unittest.TestCase):
         prepared = SimpleNamespace(
             store=store, scheduler=MagicMock(), config=SimpleNamespace(params_path="p")
         )
-        with patch("jobchain.operations._check_params_digest"):
+        with patch("jobchain.operations.reconcile._check_params_digest"):
             result = doctor(prepared)
         text = "\n".join(f.detail for f in result.findings)
         self.assertIn("failed validation", text)
@@ -1332,8 +1333,8 @@ class TestOperationsRemaining(unittest.TestCase):
         )
         launched = RunResult(store=store)
         launched.submitted = [("p", [("s", "2")])]
-        with patch("jobchain.operations._check_params_digest"), patch(
-            "jobchain.operations._submit_chains",
+        with patch("jobchain.operations.reconcile._check_params_digest"), patch(
+            "jobchain.operations.reconcile._submit_chains",
             side_effect=lambda p, w, r: setattr(r, "submitted", launched.submitted),
         ):
             result = doctor(prepared, repair=True, dry_run=False)
@@ -1346,12 +1347,12 @@ class TestOperationsRemaining(unittest.TestCase):
         payload = {"rows": {"done": 1, "failed": 2}, "completion": "c"}
         bad = SimpleNamespace(returncode=1, stderr="bad")
         with patch("jobchain.operations.subprocess.run", return_value=bad), patch(
-            "jobchain.operations.get_logger"
+            "jobchain.operations.completion.get_logger"
         ) as logger:
             _run_hook(store, "echo {run.name}", payload)
         logger.return_value.warning.assert_called_once()
         with patch("jobchain.operations.subprocess.run", side_effect=RuntimeError("x")), patch(
-            "jobchain.operations.get_logger"
+            "jobchain.operations.completion.get_logger"
         ) as logger:
             _run_hook(store, "echo", payload)
         self.assertEqual(logger.return_value.warning.call_count, 1)
@@ -1401,7 +1402,7 @@ class TestOperationsFinalBranches(unittest.TestCase):
         prepared = SimpleNamespace(
             store=store, scheduler=MagicMock(), config=SimpleNamespace(params_path="p")
         )
-        with patch("jobchain.operations._check_params_digest"):
+        with patch("jobchain.operations.reconcile._check_params_digest"):
             result = doctor(prepared)
         self.assertFalse(any("chain ended here" in f.detail for f in result.findings))
 
@@ -1446,7 +1447,7 @@ class TestRerunPlanningEdges(unittest.TestCase):
             work_dir=tempfile.gettempdir(),
             runs=[RunState(1, stages=[StageState("a", DONE)])],
         )
-        with patch("jobchain.operations._existing_output", return_value=[("/x", 1, 2)]):
+        with patch("jobchain.operations.rerun._existing_output", return_value=[("/x", 1, 2)]):
             plan = plan_rerun(p, [row])
         self.assertEqual(len(plan.needs_confirmation), 1)
 
@@ -1489,7 +1490,7 @@ class TestOutputAndCorrectionEdges(unittest.TestCase):
         )
         row = RowState("r", "r", 1, 0, {"x": "old"}, 1, valid=True)
         checked = SimpleNamespace(ok=False, reasons=lambda: ["bad"])
-        with patch("jobchain.operations._scan_row", return_value=checked), self.assertRaises(DataError):
+        with patch("jobchain.operations.rerun.scan_row", return_value=checked), self.assertRaises(DataError):
             _apply_changes(prepared, row, {"x": "new"})
         store.hold.assert_not_called()
 
@@ -1504,7 +1505,7 @@ class TestOutputAndCorrectionEdges(unittest.TestCase):
         row = RowState("r", "r", 1, 0, {"x": "old"}, 1, valid=True)
         checked = SimpleNamespace(ok=True, record={"x": "new"})
         store.write_row.side_effect = OSError("disk full")
-        with patch("jobchain.operations._scan_row", return_value=checked), self.assertRaises(OSError):
+        with patch("jobchain.operations.rerun.scan_row", return_value=checked), self.assertRaises(OSError):
             _apply_changes(prepared, row, {"x": "new"})
         store.release.assert_called_once_with("r")
 
@@ -1518,8 +1519,8 @@ class TestOutputAndCorrectionEdges(unittest.TestCase):
         )
         row = RowState("r", "r", 1, 0, {"x": "old"}, 1, valid=True)
         checked = SimpleNamespace(ok=True, record={"x": "new"})
-        with patch("jobchain.operations._scan_row", return_value=checked), patch(
-            "jobchain.operations.get_logger"
+        with patch("jobchain.operations.rerun.scan_row", return_value=checked), patch(
+            "jobchain.operations.rerun.get_logger"
         ) as logger:
             _apply_changes(prepared, row, {"x": "new"})
         store.hold.assert_called_once_with("r")
@@ -1539,8 +1540,8 @@ class TestRegenerationAndSelectedSubmission(unittest.TestCase):
         row = SimpleNamespace(params={"x": 1})
         store.load_row.return_value = row
         prepared = SimpleNamespace(store=store, pipeline=pipeline)
-        with patch("jobchain.operations._context_for", return_value=Mock()), patch(
-            "jobchain.operations.verify_script", return_value="missing command"
+        with patch("jobchain.operations.rerun._context_for", return_value=Mock()), patch(
+            "jobchain.operations.rerun.verify_script", return_value="missing command"
         ), self.assertRaises(DataError):
             _regenerate_row(prepared, "r")
 
@@ -1552,8 +1553,8 @@ class TestRegenerationAndSelectedSubmission(unittest.TestCase):
         store = Mock()
         store.load_row.return_value = SimpleNamespace(params={"x": 1})
         prepared = SimpleNamespace(store=store, pipeline=pipeline)
-        with patch("jobchain.operations._context_for", return_value=Mock()), patch(
-            "jobchain.operations.verify_script", return_value=""
+        with patch("jobchain.operations.rerun._context_for", return_value=Mock()), patch(
+            "jobchain.operations.rerun.verify_script", return_value=""
         ):
             self.assertEqual(_regenerate_row(prepared, "r"), 1)
         store.write_manifest.assert_called_once()
@@ -1575,7 +1576,7 @@ class TestRegenerationAndSelectedSubmission(unittest.TestCase):
         scheduler = Mock()
         scheduler.submit_pipeline.return_value = []
         prepared = SimpleNamespace(store=store, scheduler=scheduler)
-        with patch("jobchain.operations._record_submissions", return_value=([], "")):
+        with patch("jobchain.operations.rerun._record_submissions", return_value=([], "")):
             result = _submit_selected(prepared, "r", ["missing"], False)
         self.assertEqual(result, ([], ""))
         scheduler.submit_pipeline.assert_called_once()
@@ -1588,7 +1589,7 @@ class TestRegenerationAndSelectedSubmission(unittest.TestCase):
         scheduler = Mock()
         scheduler.submit_pipeline.return_value = []
         prepared = SimpleNamespace(store=store, scheduler=scheduler)
-        with patch("jobchain.operations._record_submissions", return_value=([], "")):
+        with patch("jobchain.operations.rerun._record_submissions", return_value=([], "")):
             _submit_selected(prepared, "r", ["a"], True)
         env = scheduler.submit_pipeline.call_args.args[1]
         self.assertEqual(env["JC_CHAIN"], "1")
@@ -1603,8 +1604,8 @@ class TestValidationAndPreparationGaps(unittest.TestCase):
         )
         normalized = Mock()
         report = Mock()
-        with patch("jobchain.operations.normalize_file", return_value=normalized) as norm, patch(
-            "jobchain.operations.scan", return_value=report
+        with patch("jobchain.operations.lifecycle.normalize_file", return_value=normalized) as norm, patch(
+            "jobchain.operations.lifecycle.scan", return_value=report
         ) as scan:
             self.assertIs(_validate_only(prepared), report)
         norm.assert_called_once_with("params.tsv", prepared.schema)
@@ -1629,6 +1630,7 @@ class TestValidationAndPreparationGaps(unittest.TestCase):
             schema=SimpleNamespace(name="s", fields=[], unique_fields=[]),
             pipeline=SimpleNamespace(name="p", specs=[], chaining_stage=None, stage_names=[]),
             store=Mock(),
+            scheduler=Mock(),
         )
         prepared.store.home = "/tmp/r"
         normalized = SimpleNamespace(rows=[1], changed_count=0, skipped_blank=0, skipped_comment=0)
@@ -1640,12 +1642,12 @@ class TestValidationAndPreparationGaps(unittest.TestCase):
             to_dict=lambda: {"ok": False},
         )
         rows = [SimpleNamespace(valid=False)]
-        with patch("jobchain.operations.normalize_file", return_value=normalized), patch(
-            "jobchain.operations.scan", return_value=report
-        ), patch("jobchain.operations._create_row_state", return_value=rows), patch(
-            "jobchain.operations._generate_scripts"
+        with patch("jobchain.operations.lifecycle.normalize_file", return_value=normalized), patch(
+            "jobchain.operations.lifecycle.scan", return_value=report
+        ), patch("jobchain.operations.lifecycle._create_row_state", return_value=rows), patch(
+            "jobchain.operations.lifecycle._generate_scripts"
         ), patch(
-            "jobchain.operations.render_final_config", return_value="final"
+            "jobchain.operations.lifecycle.render_final_config", return_value="final"
         ):
             result = _prepare_fresh(prepared)
         self.assertEqual(result.rows_invalid, 1)
@@ -1662,7 +1664,7 @@ class TestSubmissionGapClosure(unittest.TestCase):
         store.claim.side_effect = [("row1", "/tmp/row1"), None]
         prepared = SimpleNamespace(store=store, config=SimpleNamespace(max_in_flight=0))
         result = RunResult(store=store)
-        with patch("jobchain.operations._submit_row", return_value=([("a", "10")], "")):
+        with patch("jobchain.operations.submit._submit_row", return_value=([("a", "10")], "")):
             _submit_chains(prepared, 2, result)
         self.assertEqual(result.submitted, [("row1", [("a", "10")])])
         self.assertTrue(result.exhausted)
@@ -1709,7 +1711,7 @@ class TestDoctorAndDigestGaps(unittest.TestCase):
     def test_digest_changed_parameter_file_adds_finding(self):
         result = SimpleNamespace(findings=[])
         with patch("jobchain.operations.os.path.isfile", return_value=True), patch(
-            "jobchain.operations._digest", return_value="new"
+            "jobchain.operations.reconcile._digest", return_value="new"
         ):
             _check_params_digest(Mock(), {"params": "/p", "params_digest": "old"}, result)
         self.assertEqual(len(result.findings), 1)
@@ -1725,7 +1727,7 @@ class TestDoctorAndDigestGaps(unittest.TestCase):
         store.load_rows.return_value = [row]
         scheduler = Mock()
         prepared = SimpleNamespace(store=store, scheduler=scheduler)
-        with patch("jobchain.operations.describe_environment", return_value={}):
+        with patch("jobchain.operations.reconcile.describe_environment", return_value={}):
             result = doctor(prepared)
         self.assertEqual(result.finished_rows, 1)
         scheduler.job_state.assert_not_called()
@@ -1762,7 +1764,7 @@ class TestCompletionGapClosure(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             store.done_path = os.path.join(td, "done.json")
             store.completions_path = os.path.join(td, "completions")
-            with patch("jobchain.operations._run_hook") as hook:
+            with patch("jobchain.operations.completion._run_hook") as hook:
                 check_completion(store, "echo done")
             hook.assert_called_once()
 
@@ -1844,8 +1846,8 @@ class TestScriptProgress(unittest.TestCase):
         progress = Mock()
         prepared = self._prepared(progress)
         row = RowState("r", "r", 1, 0, {}, 1, valid=True)
-        with patch("jobchain.operations._context_for", return_value=Mock()), patch(
-            "jobchain.operations.verify_script", return_value=""
+        with patch("jobchain.operations.lifecycle._context_for", return_value=Mock()), patch(
+            "jobchain.operations.lifecycle.verify_script", return_value=""
         ):
             result = RunResult(store=prepared.store)
             _generate_scripts(prepared, [row], result, progress=progress)
@@ -1877,8 +1879,8 @@ class TestRerunExecution(unittest.TestCase):
         prepared = self._prepared()
         row = RowState("r", "r", 1, 1, {"x": "1"}, 1, valid=True)
         plan = RerunPlan(rows=[row], stages=["a", "b"], new_generation=True)
-        with patch("jobchain.operations._regenerate_row", return_value=2), patch(
-            "jobchain.operations._submit_selected", return_value=([("a", "9")], "")
+        with patch("jobchain.operations.rerun._regenerate_row", return_value=2), patch(
+            "jobchain.operations.rerun._submit_selected", return_value=([("a", "9")], "")
         ):
             result = execute_rerun(prepared, plan, regenerate=True, chain=True)
         prepared.store.seed_handoff.assert_called_once_with("r", {"x": "1"})
@@ -1890,7 +1892,7 @@ class TestRerunExecution(unittest.TestCase):
         prepared = self._prepared()
         row = RowState("r", "r", 1, 1, {"x": "1"}, 1, valid=True)
         plan = RerunPlan(rows=[row], stages=["a"], new_generation=True)
-        with patch("jobchain.operations._regenerate_row", return_value=1):
+        with patch("jobchain.operations.rerun._regenerate_row", return_value=1):
             execute_rerun(prepared, plan, regenerate=True, fresh_handoff=True)
         prepared.store.clear_handoff_seed.assert_called_once_with("r")
         prepared.store.seed_handoff.assert_not_called()
@@ -1899,7 +1901,7 @@ class TestRerunExecution(unittest.TestCase):
         prepared = self._prepared()
         row = RowState("r", "r", 1, 1, {"x": "1"}, 1, valid=True)
         plan = RerunPlan(rows=[row], stages=["b"], new_generation=False)
-        with patch("jobchain.operations._submit_selected", return_value=([("b", "4")], "")):
+        with patch("jobchain.operations.rerun._submit_selected", return_value=([("b", "4")], "")):
             result = execute_rerun(prepared, plan, chain=False)
         prepared.store.bump_generation.assert_not_called()
         self.assertEqual(result.submitted, [("r", [("b", "4")])])
@@ -1952,7 +1954,7 @@ class TestDoctorAndCompletion(unittest.TestCase):
         store.load_rows.return_value = [RowState("r", "r", 1, 0, {}, 1, valid=True)]
         scheduler = Mock()
         prepared = SimpleNamespace(store=store, scheduler=scheduler)
-        with patch("jobchain.operations.describe_environment", return_value={}):
+        with patch("jobchain.operations.reconcile.describe_environment", return_value={}):
             result = doctor(prepared)
         self.assertEqual(result.pending_rows, 1)
         self.assertFalse(result.findings)
@@ -1968,7 +1970,7 @@ class TestDoctorAndCompletion(unittest.TestCase):
         store.load_rows.return_value = [row]
         store.run_dir.return_value = "/tmp/r"
         prepared = SimpleNamespace(store=store, scheduler=Mock())
-        with patch("jobchain.operations.describe_environment", return_value={}):
+        with patch("jobchain.operations.reconcile.describe_environment", return_value={}):
             result = doctor(prepared, repair=True)
         self.assertTrue(result.findings[0].repaired)
         store.mark.assert_called_once()
@@ -1986,7 +1988,7 @@ class TestDoctorAndCompletion(unittest.TestCase):
         scheduler = Mock()
         scheduler.job_state.return_value = "FINISHED"
         prepared = SimpleNamespace(store=store, scheduler=scheduler)
-        with patch("jobchain.operations.describe_environment", return_value={}):
+        with patch("jobchain.operations.reconcile.describe_environment", return_value={}):
             result = doctor(prepared)
         self.assertTrue(result.findings)
 
@@ -2027,7 +2029,7 @@ class TestOperationsLastBranches(unittest.TestCase):
         prepared = SimpleNamespace(
             store=store, scheduler=MagicMock(), config=SimpleNamespace(max_in_flight=0, width=1)
         )
-        with patch.object(operations, "_generate_scripts") as gen, patch.object(
+        with patch.object(operations.lifecycle, "_generate_scripts") as gen, patch.object(
             store, "acquire_lock"
         ), patch.object(store, "release_lock"):
             result = operations._continue_existing(
@@ -2079,7 +2081,7 @@ class TestOperationsLastBranches(unittest.TestCase):
             pipeline=SimpleNamespace(stage_names=["solve"]),
             store=SimpleNamespace(load_config=lambda: {"max_attempts": 3}),
         )
-        with patch.object(operations, "_existing_output", return_value=[("p", 1, 1)]):
+        with patch.object(operations.rerun, "_existing_output", return_value=[("p", 1, 1)]):
             plan = operations.plan_rerun(prepared, [row])
         self.assertEqual(plan.needs_confirmation, [])
         self.assertEqual(plan.rows, [row])
@@ -2107,7 +2109,7 @@ class TestOperationsLastBranches(unittest.TestCase):
             config=SimpleNamespace(width=1, chaining_stage=""),
             schema=MagicMock(),
         )
-        with patch.object(operations, "describe_environment", return_value={}):
+        with patch.object(operations.reconcile, "describe_environment", return_value={}):
             result = operations.doctor(prepared, repair=True, dry_run=False)
         self.assertEqual(len(result.findings), 1)
         self.assertTrue(result.findings[0].repaired)
@@ -2118,7 +2120,7 @@ class TestOperationsLastBranches(unittest.TestCase):
         payload = {"completion": 3, "rows": {"done": 2, "failed": 1}}
         completed = SimpleNamespace(returncode=2, stderr="bad hook")
         with patch("jobchain.operations.subprocess.run", return_value=completed), patch(
-            "jobchain.operations.get_logger"
+            "jobchain.operations.completion.get_logger"
         ) as logger:
             operations._run_hook(store, "echo {run.name}", payload)
         logger.return_value.warning.assert_called_once()
@@ -2134,9 +2136,9 @@ class TestOperationsRemainingBranches(unittest.TestCase):
             scheduler=MagicMock(),
             config=SimpleNamespace(max_in_flight=1, width=1),
         )
-        with patch.object(operations, "_generate_scripts"), patch.object(
-            operations, "_check_inputs_unchanged"
-        ), patch.object(operations, "_submit_chains") as submit, patch.object(
+        with patch.object(operations.lifecycle, "_generate_scripts"), patch.object(
+            operations.lifecycle, "_check_inputs_unchanged"
+        ), patch.object(operations.lifecycle, "_submit_chains") as submit, patch.object(
             store, "acquire_lock"
         ), patch.object(
             store, "release_lock"
@@ -2162,7 +2164,7 @@ class TestOperationsRemainingBranches(unittest.TestCase):
             pipeline=SimpleNamespace(stage_names=["solve"]),
             store=SimpleNamespace(load_config=lambda: {"max_attempts": 3}),
         )
-        with patch.object(operations, "_existing_output", return_value=[]):
+        with patch.object(operations.rerun, "_existing_output", return_value=[]):
             plan = operations.plan_rerun(prepared, [row])
         self.assertEqual(plan.needs_confirmation, [])
         self.assertEqual(plan.rows, [row])
@@ -2186,7 +2188,7 @@ class TestOperationsRemainingBranches(unittest.TestCase):
         prepared = SimpleNamespace(
             store=store, scheduler=scheduler, config=SimpleNamespace(width=1), schema=MagicMock()
         )
-        with patch.object(operations, "describe_environment", return_value={}):
+        with patch.object(operations.reconcile, "describe_environment", return_value={}):
             result = operations.doctor(prepared, repair=False, dry_run=False)
         self.assertEqual(result.live_chains, 0)
         self.assertEqual(result.findings, [])
@@ -2196,7 +2198,7 @@ class TestOperationsRemainingBranches(unittest.TestCase):
         payload = {"completion": 3, "rows": {"done": 2, "failed": 1}}
         completed = SimpleNamespace(returncode=0, stderr="")
         with patch("jobchain.operations.subprocess.run", return_value=completed), patch(
-            "jobchain.operations.get_logger"
+            "jobchain.operations.completion.get_logger"
         ) as logger:
             operations._run_hook(store, "echo {run.name}", payload)
         logger.return_value.warning.assert_not_called()

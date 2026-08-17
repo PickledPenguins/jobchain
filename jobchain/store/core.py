@@ -1,25 +1,4 @@
-"""On-disk state for a run.
-
-Every execution owns a directory named for the run, so two unrelated runs in
-the same working directory never interact::
-
-    .jobchain/
-      solver-production/
-        config.original.yaml  config.final.yaml  jobchain.log
-        rows.idx  events.log  done.json  stopped
-        rows/000123/
-          meta.json  env  gen  manifest  hold
-          run-1/  claim  status  status.<stage>  jobid.<stage>  handoff  timeline
-
-Two rules make concurrent access safe without a lock on the hot path.
-Claiming a row is a single ``mkdir`` of its generation directory, which
-succeeds for exactly one caller. Editing a row takes it out of circulation
-with a hold file first, so a claimer never sees a half-written row.
-
-Claiming is performed by the compiled helper rather than reimplemented here,
-so there is one implementation of the protocol and no chance of the two
-drifting apart.
-"""
+"""The Store: reads and writes the on-disk state of one run."""
 
 from __future__ import annotations
 
@@ -28,199 +7,26 @@ import os
 import shutil
 import subprocess
 import time
-from dataclasses import dataclass
-from dataclasses import field as dc_field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from .core import VERSION, NodeHelperError, StateError, get_logger, trace
-
-# Row-level statuses. PENDING is implied by the absence of a run directory
-# for the current generation rather than being written anywhere.
-PENDING = "PENDING"
-QUEUED = "QUEUED"
-RUNNING = "RUNNING"
-DONE = "DONE"
-FAILED = "FAILED"
-CANCELLED = "CANCELLED"
-INVALID = "INVALID"
-CLAIMED = "CLAIMED"
-
-#: Statuses from which nothing further happens without intervention.
-TERMINAL = {DONE, FAILED, CANCELLED, INVALID}
-#: Statuses meaning the row still owes work to the scheduler.
-ACTIVE = {CLAIMED, QUEUED, RUNNING}
-
-DEFAULT_ROOT = ".jobchain"
-NODE_BINARY_NAME = "jobchain-node"
-
-
-@dataclass
-class StageState:
-    """Recorded state of one stage of one generation."""
-
-    name: str
-    status: str = PENDING
-    jobid: Optional[str] = None
-    error: Optional[str] = None
-    depends: str = ""
-    script: str = ""
-    resources: Dict[str, Any] = dc_field(default_factory=dict)
-    timeline: List[str] = dc_field(default_factory=list)
-
-
-@dataclass
-class RunState:
-    """One generation of one row: its claim, its stages, its handoff."""
-
-    generation: int
-    claim: Optional[str] = None
-    stages: List[StageState] = dc_field(default_factory=list)
-    handoff: Dict[str, str] = dc_field(default_factory=dict)
-
-    def stage(self, name: str) -> Optional[StageState]:
-        for stage in self.stages:
-            if stage.name == name:
-                return stage
-        return None
-
-
-@dataclass
-class RowState:
-    """A row's identity, parameters, and history across generations."""
-
-    name: str
-    row_id: str
-    line_num: int
-    index: int
-    params: Dict[str, Any]
-    generation: int
-    runs: List[RunState] = dc_field(default_factory=list)
-    held: bool = False
-    valid: bool = True
-    invalid_reasons: List[str] = dc_field(default_factory=list)
-    failure_id: str = ""
-    work_dir: str = ""
-    #: Raw field values, kept for rows that failed validation so they can be
-    #: corrected later: their typed parameters do not exist.
-    raw_fields: List[str] = dc_field(default_factory=list)
-
-    @property
-    def current(self) -> Optional[RunState]:
-        for run in self.runs:
-            if run.generation == self.generation:
-                return run
-        return None
-
-    @property
-    def attempts(self) -> int:
-        return len(self.runs)
-
-    @property
-    def status(self) -> str:
-        """Roll-up status, derived from the current generation's stages.
-
-        A row is only DONE when every stage succeeded; it takes the first
-        failure it finds otherwise, because that is the stage a person needs
-        to look at.
-        """
-        if not self.valid:
-            return f"failed.validation.{self.failure_id or 'unknown'}"
-        run = self.current
-        if run is None or not run.stages:
-            return PENDING
-        statuses = [stage.status for stage in run.stages]
-        for stage in run.stages:
-            if stage.status == FAILED:
-                return f"failed.{stage.name}.{_code_of(stage.error)}"
-            if stage.status == CANCELLED:
-                return f"cancelled.{stage.name}"
-        if all(status == DONE for status in statuses):
-            return DONE
-        if RUNNING in statuses:
-            return RUNNING
-        if QUEUED in statuses or CLAIMED in statuses:
-            return QUEUED
-        return PENDING
-
-    @property
-    def stage_reached(self) -> str:
-        """The stage a person should look at: the failure, or the newest."""
-        run = self.current
-        if run is None or not run.stages:
-            return ""
-        for stage in run.stages:
-            if stage.status in (FAILED, CANCELLED):
-                return stage.name
-        for stage in reversed(run.stages):
-            if stage.status != PENDING:
-                return stage.name
-        return run.stages[0].name
-
-    @property
-    def jobid(self) -> Optional[str]:
-        run = self.current
-        if run is None:
-            return None
-        for stage in run.stages:
-            if stage.name == self.stage_reached:
-                return stage.jobid
-        return None
-
-    @property
-    def is_terminal(self) -> bool:
-        status = self.status
-        return (status == DONE or status.startswith("failed.")
-                or status.startswith("cancelled."))
-
-
-def _code_of(error: Optional[str]) -> str:
-    """Extract a compact failure code from a recorded error message."""
-    if not error:
-        return "unknown"
-    for token in error.split():
-        if token.isdigit():
-            return token
-    return "error"
-
-
-# ---------------------------------------------------------------------------
-# Helper discovery
-# ---------------------------------------------------------------------------
-
-
-def find_node_binary(explicit: Optional[str] = None) -> str:
-    """Locate the compute-node helper.
-
-    Search order is the explicit path, then JOBCHAIN_NODE, then a bin
-    directory alongside this package, then PATH. The failure names every
-    place that was tried, because a missing binary is the most likely
-    first-run problem.
-    """
-    candidates: List[Tuple[str, Optional[str]]] = [
-        ("--node-binary", explicit),
-        ("JOBCHAIN_NODE", os.environ.get("JOBCHAIN_NODE")),
-        ("alongside the package",
-         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                      "bin", NODE_BINARY_NAME)),
-        ("PATH", shutil.which(NODE_BINARY_NAME)),
-    ]
-    tried: List[str] = []
-    for origin, path in candidates:
-        if not path:
-            tried.append(f"{origin} (unset)")
-            continue
-        if os.path.isfile(path) and os.access(path, os.X_OK):
-            trace("using node helper from %s: %s", origin, path)
-            return os.path.abspath(path)
-        tried.append(f"{origin}: {path}")
-    raise NodeHelperError(
-        "the helper 'jobchain-node' could not be found; tried " + "; ".join(tried)
-    )
-
-
-# ---------------------------------------------------------------------------
-# The store
-# ---------------------------------------------------------------------------
+from ..core import VERSION, NodeHelperError, StateError, get_logger, trace
+from .io import (
+    _column_value,
+    _hostname,
+    _pad,
+    _parse_assignments,
+    _parse_handoff,
+    _read_json,
+    _read_lines,
+    _read_optional,
+    _read_text,
+    _write_json,
+    _write_text,
+    render_env,
+    shell_quote,
+)
+from .model import DEFAULT_ROOT, PENDING, RowState, RunState, StageState
+from .node import find_node_binary
 
 
 class Store:
@@ -500,7 +306,7 @@ class Store:
             if os.path.exists(path):
                 os.unlink(path)
             return
-        _write_text(path, "".join(f"JC_OUT_{k}={_shell_quote(v)}\n"
+        _write_text(path, "".join(f"JC_OUT_{k}={shell_quote(v)}\n"
                                   f"export JC_OUT_{k}\n"
                                   for k, v in sorted(values.items())))
 
@@ -735,143 +541,3 @@ class Store:
         for row in self.load_rows():
             counts[row.status] = counts.get(row.status, 0) + 1
         return counts
-
-
-# ---------------------------------------------------------------------------
-# Free functions
-# ---------------------------------------------------------------------------
-
-
-def _column_value(row: RowState, column: str,
-                  field_names: Optional[Sequence[str]]) -> str:
-    """A row's value for a column, falling back to its raw text.
-
-    A row that failed validation has no typed parameters, but must still be
-    findable by name: locating it is the first step in correcting it.
-    """
-    if column in row.params:
-        return str(row.params[column])
-    if row.raw_fields and field_names is not None:
-        try:
-            position = list(field_names).index(column)
-        except ValueError:
-            return ""
-        if position < len(row.raw_fields):
-            return row.raw_fields[position].strip()
-    return ""
-
-
-def row_name(index: int) -> str:
-    """Directory name for the nth data row, padded for stable ordering."""
-    return _pad(str(index + 1))
-
-
-def _pad(value: str) -> str:
-    return f"{int(value):06d}"
-
-
-def render_env(params: Dict[str, Any]) -> str:
-    """Render parameters as a shell fragment a job can source.
-
-    Values are single-quoted with embedded quotes escaped, so a parameter
-    containing spaces or shell metacharacters reaches the job exactly as
-    validated rather than being re-split by the shell.
-    """
-    lines = ["# Generated by jobchain. Do not edit; use 'jobchain rerun --set'.\n"]
-    for key in sorted(params):
-        value = params[key]
-        if value is None:
-            rendered = ""
-        elif isinstance(value, bool):
-            rendered = "1" if value else "0"
-        else:
-            rendered = str(value)
-        lines.append(f"JC_{key}={_shell_quote(rendered)}\n")
-        lines.append(f"export JC_{key}\n")
-    return "".join(lines)
-
-
-def _shell_quote(value: str) -> str:
-    return "'" + value.replace("'", "'\\''") + "'"
-
-
-def _parse_handoff(text: str) -> Dict[str, str]:
-    """Parse the shell fragment stages emit into a mapping."""
-    values: Dict[str, str] = {}
-    for line in text.splitlines():
-        if line.startswith("JC_OUT_") and "=" in line:
-            key, _, raw = line.partition("=")
-            name = key[len("JC_OUT_"):]
-            value = raw.strip()
-            if value.startswith("'") and value.endswith("'") and len(value) >= 2:
-                value = value[1:-1].replace("'\\''", "'")
-            values[name] = value
-    return values
-
-
-def _parse_assignments(text: str) -> Dict[str, str]:
-    out: Dict[str, str] = {}
-    for line in text.splitlines():
-        if "=" in line:
-            key, _, value = line.partition("=")
-            out[key.strip()] = value.strip()
-    return out
-
-
-def _hostname() -> str:
-    import socket
-    try:
-        return socket.gethostname()
-    except OSError:  # pragma: no cover
-        return "unknown"
-
-
-def _write_text(path: str, text: str) -> None:
-    """Write text atomically and clean up an abandoned temporary file."""
-    directory = os.path.dirname(path)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    temporary = f"{path}.tmp.{os.getpid()}"
-    try:
-        with open(temporary, "w", encoding="utf-8") as handle:
-            handle.write(text)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-    finally:
-        # If writing or replacement fails, the old target remains intact, but
-        # the staging file must not become stale state or confuse recovery.
-        try:
-            if os.path.exists(temporary):
-                os.unlink(temporary)
-        except OSError:
-            pass
-
-
-def _write_json(path: str, payload: Any) -> None:
-    _write_text(path, json.dumps(payload, indent=2, sort_keys=True, default=str) + "\n")
-
-
-def _read_text(path: str, default: str = "") -> str:
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return handle.read()
-    except OSError:
-        return default
-
-
-def _read_json(path: str, default: Any) -> Any:
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return json.load(handle)
-    except (OSError, json.JSONDecodeError):
-        return default
-
-
-def _read_optional(path: str) -> Optional[str]:
-    stripped = _read_text(path, "").strip()
-    return stripped or None
-
-
-def _read_lines(path: str) -> List[str]:
-    return [line for line in _read_text(path, "").splitlines() if line.strip()]

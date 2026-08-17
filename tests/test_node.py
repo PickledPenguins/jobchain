@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import multiprocessing
 import os
+import re
 import signal
 import subprocess
 import unittest
 from typing import List, Tuple
 
+from jobchain.scheduler import Scheduler
 from tests.helpers import NODE_BINARY, TempProject, require_node_binary
 
 
@@ -64,7 +66,18 @@ class NodeHelperCase(TempProject):
             names.append(name)
         with open(os.path.join(home, "rows.idx"), "w", encoding="utf-8") as handle:
             handle.write("".join(f"{n}\n" for n in names))
+        self.write_scheduler_facts(home)
         return home
+
+    def write_scheduler_facts(self, home: str, kind: str = "pbs") -> None:
+        """Write the facts a real prepared run has (Scheduler(kind).write_facts).
+
+        This test lays out a state directory by hand rather than through the
+        Python front end, so it must reproduce this file too: the node
+        helper reads scheduler syntax from here rather than knowing PBS/Slurm
+        command shapes itself.
+        """
+        Scheduler(kind).write_facts(home)
 
     def status_of(self, home: str, row: str, generation: int = 1,
                   stage: str = "only") -> str:
@@ -481,3 +494,35 @@ class TestShellImplementation(NodeHelperCase):
         self.assertEqual(self.run_shell("claim").returncode, 1)
         self.assertEqual(self.run_shell("frobnicate").returncode, 1)
         self.assertIn("0.6", self.run_shell("version").stdout)
+
+
+class TestExitCodeContract(unittest.TestCase):
+    """The C helper's exit codes must not silently drift from core.py's.
+
+    A wrapper script branches on these numbers, not on message text, so a
+    code that means one thing in the Python front end and another in the
+    compiled helper would be a real, silent contract break -- catching it
+    is worth more than the two files staying textually in sync.
+    """
+
+    def test_shared_exit_code_names_match_jobchain_core(self):
+        from jobchain.core import EXIT_INTERNAL, EXIT_OK, EXIT_STATE, EXIT_USAGE
+
+        source_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "src", "jobchain-node.c")
+        with open(source_path, "r", encoding="utf-8") as handle:
+            source = handle.read()
+        c_codes = dict(re.findall(r"#define\s+JC_EXIT_(\w+)\s+(\d+)", source))
+        self.assertTrue(c_codes, "no JC_EXIT_* defines found; regex is stale")
+
+        python_codes = {
+            "OK": EXIT_OK, "USAGE": EXIT_USAGE, "INTERNAL": EXIT_INTERNAL,
+            "STATE": EXIT_STATE,
+        }
+        shared = set(c_codes) & set(python_codes)
+        self.assertEqual(shared, set(python_codes), "expected names missing "
+                         "from src/jobchain-node.c")
+        for name in shared:
+            self.assertEqual(int(c_codes[name]), python_codes[name],
+                             f"JC_EXIT_{name} disagrees with EXIT_{name}")

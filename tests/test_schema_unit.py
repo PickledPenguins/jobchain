@@ -398,18 +398,18 @@ class TestSchemaFinalBranches(unittest.TestCase):
                 _load_schema_class("classes.py", p, {}, "s", {})
 
     def test_import_module_spec_and_execution_failures(self):
-        from jobchain.schema import _import_module
+        from jobchain.schema import import_module_from_path
 
         with tempfile.TemporaryDirectory() as d:
             p = os.path.join(d, "m.py")
             with open(p, "w") as h:
                 h.write("X=1\n")
             with patch("jobchain.schema.importlib.util.spec_from_file_location", return_value=None), self.assertRaises(SchemaError):
-                _import_module("m.py", p)
+                import_module_from_path("m.py", p)
             with open(p, "w") as h:
                 h.write("raise RuntimeError('boom')\n")
             with self.assertRaises(SchemaError):
-                _import_module("m.py", p)
+                import_module_from_path("m.py", p)
 
     def test_field_description_falls_back_to_validator(self):
         f = Field("x", [Str()])

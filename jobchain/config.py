@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from dataclasses import field as dc_field
 from typing import Any, Dict, List, Optional, Tuple
 
-from .core import VERSION, ConfigError, UsageError
+from .core import PBS, SLURM, VERSION, ConfigError, UsageError, reject_unknown_keys
 
 #: Settings that may be overridden on the command line, and their types.
 OVERRIDABLE = {
@@ -61,7 +61,7 @@ class RunConfig:
     max_attempts: int = 0               # 0 means no cap
     max_in_flight: int = 0              # 0 means no ceiling
     strict: bool = False
-    scheduler: str = "pbs"
+    scheduler: str = PBS
     on_complete: str = ""
     terminal_level: str = "info"
     file_level: str = "debug"
@@ -88,7 +88,7 @@ class RunConfig:
             raise ConfigError(f"width must be at least 1, got {self.width}")
         if self.workers < 0:
             raise ConfigError("workers cannot be negative")
-        if self.scheduler not in ("pbs", "slurm"):
+        if self.scheduler not in (PBS, SLURM):
             raise ConfigError(
                 f"scheduler must be 'pbs' or 'slurm', got '{self.scheduler}'"
             )
@@ -172,12 +172,7 @@ def load_config(path: str, overrides: Optional[Dict[str, Any]] = None) -> RunCon
     if not isinstance(document, dict):
         raise ConfigError(f"{path} must be a YAML mapping at the top level")
 
-    unknown = set(document) - TOP_LEVEL
-    if unknown:
-        raise ConfigError(
-            f"unknown key(s) {sorted(unknown)} in {path}; recognized keys are "
-            f"{sorted(TOP_LEVEL)}"
-        )
+    reject_unknown_keys(document, TOP_LEVEL, path)
 
     for required in ("name", "params", "schema"):
         if required not in document:
@@ -185,8 +180,8 @@ def load_config(path: str, overrides: Optional[Dict[str, Any]] = None) -> RunCon
 
     logging_section = document.get("logging") or {}
     paths_section = document.get("paths") or {}
-    _reject_unknown(logging_section, {"terminal", "file", "file_name"}, "logging")
-    _reject_unknown(paths_section, {"work_dir", "log_dir"}, "paths")
+    reject_unknown_keys(logging_section, {"terminal", "file", "file_name"}, "logging")
+    reject_unknown_keys(paths_section, {"work_dir", "log_dir"}, "paths")
 
     provenance: Dict[str, str] = {}
     settings: Dict[str, Any] = {}
@@ -209,7 +204,7 @@ def load_config(path: str, overrides: Optional[Dict[str, Any]] = None) -> RunCon
     settings["max_attempts"] = take("max_attempts", 0, int)
     settings["max_in_flight"] = take("max_in_flight", 0, int)
     settings["strict"] = bool(take("strict", False))
-    settings["scheduler"] = str(take("scheduler", "pbs")).lower()
+    settings["scheduler"] = str(take("scheduler", PBS)).lower()
     settings["on_complete"] = str(document.get("on_complete") or "")
     settings["terminal_level"] = str(logging_section.get("terminal", "info")).lower()
     settings["file_level"] = str(logging_section.get("file", "debug")).lower()
@@ -251,13 +246,6 @@ def _username() -> str:
         return os.environ.get("USER", "unknown")
 
 
-def _reject_unknown(mapping: Dict[str, Any], allowed: set, where: str) -> None:
-    unknown = set(mapping) - allowed
-    if unknown:
-        raise ConfigError(
-            f"unknown key(s) {sorted(unknown)} in {where}; recognized keys are "
-            f"{sorted(allowed)}"
-        )
 
 
 def _resolve(path: str, base_dir: str) -> str:

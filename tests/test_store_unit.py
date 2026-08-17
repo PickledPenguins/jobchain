@@ -19,6 +19,7 @@ from jobchain.store import (
     DONE,
     PENDING,
     RowState,
+    RowStatus,
     RunState,
     StageState,
     Store,
@@ -54,6 +55,30 @@ def row(rid="001", runs=None):
         failure_id="",
         work_dir="",
     )
+
+
+class TestRowStatusIsTransparentlyAString(unittest.TestCase):
+    """RowStatus is a str-mixin Enum specifically so every existing
+    comparison, dict key, and JSON output keeps working unchanged. These
+    two properties are exactly what that choice depends on.
+    """
+
+    def test_serializes_as_its_plain_string_value(self):
+        self.assertEqual(json.dumps({"s": RowStatus.DONE}), '{"s": "DONE"}')
+
+    def test_round_trips_from_the_value_read_off_disk(self):
+        self.assertIs(RowStatus("DONE"), RowStatus.DONE)
+        self.assertEqual(RowStatus.DONE, "DONE")
+
+    def test_str_and_fstring_format_as_the_plain_value_not_the_member_name(self):
+        # A plain `str, Enum` mixin's str()/f-string formatting renders
+        # "RowStatus.DONE" rather than "DONE" on some Python versions --
+        # exactly the kind of call site report.py's f"status={terminal}"
+        # relies on. This is what RowStatus's __str__/__format__ overrides
+        # guard against; catches a regression if either is ever removed.
+        self.assertEqual(str(RowStatus.DONE), "DONE")
+        self.assertEqual(f"{RowStatus.DONE}", "DONE")
+        self.assertEqual("{}".format(RowStatus.DONE), "DONE")
 
 
 class TestStorePathsAndDiscovery(unittest.TestCase):
@@ -538,7 +563,7 @@ class TestStoreDeep(unittest.TestCase):
     def test_event_logs_warning_on_helper_failure(self):
         result = SimpleNamespace(returncode=1, stdout="", stderr="event failed")
         with patch.object(self.store, "_run_node", return_value=result), patch(
-            "jobchain.store.get_logger"
+            "jobchain.store.core.get_logger"
         ) as logger:
             self.store.event("hello")
             logger.return_value.warning.assert_called_once()
@@ -576,7 +601,7 @@ class TestStoreRemaining(unittest.TestCase):
 
     def test_node_binary_lazy_lookup(self):
         store = Store("/tmp/jobchain-store-test")
-        with patch("jobchain.store.find_node_binary", return_value="/node") as find:
+        with patch("jobchain.store.core.find_node_binary", return_value="/node") as find:
             self.assertEqual(store.node_binary, "/node")
             self.assertEqual(store.node_binary, "/node")
         find.assert_called_once()
@@ -635,7 +660,7 @@ class TestStoreRemaining(unittest.TestCase):
         store = Store("/tmp/x")
         result = SimpleNamespace(returncode=1, stderr="bad", stdout="")
         with patch.object(store, "_run_node", return_value=result), patch(
-            "jobchain.store.get_logger"
+            "jobchain.store.core.get_logger"
         ) as logger:
             store.event("x")
         logger.return_value.warning.assert_called_once()
@@ -660,7 +685,7 @@ class TestStoreRemaining(unittest.TestCase):
 
     def test_find_node_binary_failure_is_propagated(self):
         with patch(
-            "jobchain.store.find_node_binary", side_effect=StateError("missing")
+            "jobchain.store.core.find_node_binary", side_effect=StateError("missing")
         ), self.assertRaises(StateError):
             _ = Store("/tmp/x").node_binary
 
@@ -729,7 +754,7 @@ class TestStoreLastBranches(unittest.TestCase):
         result = SimpleNamespace(returncode=0, stderr="")
         with tempfile.TemporaryDirectory() as d, patch.object(
             Store, "_run_node", return_value=result
-        ), patch("jobchain.store.get_logger") as logger:
+        ), patch("jobchain.store.core.get_logger") as logger:
             Store(d).event("hello")
         logger.return_value.warning.assert_not_called()
 

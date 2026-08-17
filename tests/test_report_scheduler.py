@@ -362,11 +362,11 @@ class TestScheduler(TempProject):
         self.assertIn("export OMP_NUM_THREADS='8'", lines)
 
     def test_job_id_parsing(self):
-        self.assertEqual(Scheduler("pbs")._parse_job_id("banner\n123.head\n"),
+        self.assertEqual(Scheduler("pbs").parse_job_id("banner\n123.head\n"),
                          "123.head")
-        self.assertEqual(Scheduler("slurm")._parse_job_id("Submitted batch job 45"),
+        self.assertEqual(Scheduler("slurm").parse_job_id("Submitted batch job 45"),
                          "45")
-        self.assertIsNone(Scheduler("pbs")._parse_job_id("  "))
+        self.assertIsNone(Scheduler("pbs").parse_job_id("  "))
 
     def test_a_missing_client_is_reported(self):
         os.environ["PATH"] = self.bin_dir

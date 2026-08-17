@@ -1,29 +1,16 @@
-"""Command line front end.
-
-This is the only module that parses arguments or prints for a person; every
-layer beneath it returns data. It is also the single place where an exception
-becomes an exit code, which upholds the rule that a traceback reaching the
-terminal always indicates a defect in this tool rather than bad input.
-
-Messages state what happened and stop. Suggested follow-up commands are
-deliberately absent: hint text spread across dozens of messages drifts out of
-step with the commands it names. Commands are documented once, in the help.
-"""
+"""The commands: run, status, show, rerun, cancel, doctor, logs, export."""
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 import time
 from typing import Any, Dict, List, Optional, Sequence
 
-from . import operations, report
-from .config import RunConfig, load_config
-from .core import (
-    EXIT_INTERNAL,
-    EXIT_NAMES,
+from .. import operations, report
+from ..config import RunConfig, load_config
+from ..core import (
     EXIT_OK,
     EXIT_USAGE,
     VERSION,
@@ -32,400 +19,20 @@ from .core import (
     StateError,
     UsageError,
     configure_logging,
-    get_logger,
 )
-from .parse import format_report
-from .store import ACTIVE, DONE, Store
-
-PROGRAM = "jobchain"
-WATCH_INTERVAL_SECONDS = 5.0
-
-
-# ---------------------------------------------------------------------------
-# Argument parsing
-# ---------------------------------------------------------------------------
-
-
-def build_parser() -> argparse.ArgumentParser:
-    """Construct the command line grammar."""
-    parser = argparse.ArgumentParser(
-        prog=PROGRAM,
-        description="Run scheduler job pipelines from a delimited parameter file.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=_EPILOG,
-    )
-    parser.add_argument("--version", action="version", version=f"{PROGRAM} {VERSION}")
-
-    common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--run", metavar="NAME", dest="run_selector",
-                        help="which run to act on; needed only when several exist")
-    common.add_argument("-v", "--verbose", action="count", default=0,
-                        help="console detail: progress, then full trace")
-    common.add_argument("--log-level", metavar="LEVEL",
-                        help="console level: error, warning, info, debug, trace")
-    common.add_argument("--file-log-level", metavar="LEVEL",
-                        help="level recorded in the run's log file")
-    common.add_argument("--json", action="store_true", dest="as_json",
-                        help="machine-readable output")
-    common.add_argument("--dry-run", action="store_true",
-                        help="report what would happen; change nothing")
-
-    sub = parser.add_subparsers(dest="command", metavar="COMMAND")
-
-    p = sub.add_parser("run", parents=[common],
-                       help="prepare and submit a run")
-    p.add_argument("config", help="the run configuration file")
-    p.add_argument("--check", action="store_true",
-                   help="validate only; write nothing, submit nothing")
-    p.add_argument("--no-submit", action="store_true",
-                   help="validate and generate scripts, but do not submit")
-    p.add_argument("--submit-only", action="store_true",
-                   help="submit existing scripts without regenerating")
-    p.add_argument("--regenerate", action="store_true",
-                   help="rebuild scripts before submitting")
-    p.add_argument("--resume", action="store_true",
-                   help="clear the stop marker and relaunch chains")
-    p.add_argument("-w", "--width", type=int, metavar="N",
-                   help="how many chains run concurrently")
-    p.add_argument("--workers", type=int, metavar="N",
-                   help="threads used to generate scripts")
-    p.add_argument("--run-name", metavar="NAME",
-                   help="override the run name from the configuration")
-    p.add_argument("--strict", action="store_true",
-                   help="refuse to proceed if any row fails validation")
-    p.add_argument("--force", action="store_true",
-                   help="discard an existing run of the same name")
-    p.add_argument("--yes", action="store_true",
-                   help="skip the confirmation --force would require")
-
-    p = sub.add_parser("status", parents=[common],
-                       help="how the run is going")
-    p.add_argument("--row", metavar="SELECTOR", help="one row, as a table line")
-    p.add_argument("--status", action="append", metavar="STATUS", dest="statuses",
-                   help="only rows whose status starts with this; repeatable")
-    p.add_argument("--stage", metavar="NAME", help="only rows at this stage")
-    p.add_argument("--watch", action="store_true",
-                   help="repaint until the run finishes")
-    p.add_argument("--summary-only", action="store_true",
-                   help="counts and warnings, without the table")
-    p.add_argument("--metrics", action="store_true",
-                   help="add throughput, per-stage timing, and a projection")
-    p.add_argument("--all", action="store_true", dest="all_runs",
-                   help="every run, one line each")
-    p.add_argument("--prune-after", type=int, metavar="DAYS",
-                   help="with --all, remove state for runs finished longer ago "
-                        "than this")
-    p.add_argument("--yes", action="store_true",
-                   help="confirm a prune")
-
-    p = sub.add_parser("show", parents=[common],
-                       help="everything about one row")
-    p.add_argument("--row", metavar="SELECTOR", help="the row to show")
-    p.add_argument("--paths", action="store_true", help="only the artifact paths")
-    p.add_argument("--stages", action="store_true", help="only the stage table")
-    p.add_argument("--history", action="store_true",
-                   help="every generation, not just the current one")
-    p.add_argument("--output", action="store_true",
-                   help="the scheduler's own log for the failing stage")
-    p.add_argument("--stage", metavar="NAME", help="with --output, which stage")
-    p.add_argument("--full", action="store_true", help="every section")
-    p.add_argument("--invalid", action="store_true",
-                   help="all rows that failed validation")
-
-    p = sub.add_parser("rerun", parents=[common],
-                       help="run rows or stages again")
-    p.add_argument("--row", action="append", metavar="SELECTOR", dest="rows",
-                   help="row to re-run; repeatable")
-    p.add_argument("--status", action="append", metavar="STATUS", dest="statuses",
-                   help="every row whose status starts with this; repeatable")
-    p.add_argument("--set", action="append", metavar="COL=VALUE",
-                   dest="assignments", help="change a value first; repeatable")
-    p.add_argument("--stage", metavar="NAME", help="one stage only")
-    p.add_argument("--stages", metavar="A,B", help="those stages, in order")
-    p.add_argument("--from", metavar="NAME", dest="from_stage",
-                   help="that stage and everything after it")
-    p.add_argument("--chain", action="store_true",
-                   help="resume chaining from these rows")
-    p.add_argument("--regenerate", action="store_true",
-                   help="rebuild scripts even without --set")
-    p.add_argument("--fresh-handoff", action="store_true",
-                   help="start the new generation with an empty handoff")
-    p.add_argument("--force", action="store_true",
-                   help="override the attempt cap, an active job, or completion")
-    p.add_argument("--yes", action="store_true",
-                   help="skip the typed confirmation")
-
-    p = sub.add_parser("cancel", parents=[common], help="stop jobs")
-    p.add_argument("--row", action="append", metavar="SELECTOR", dest="rows",
-                   help="row to cancel; repeatable")
-    p.add_argument("--status", action="append", metavar="STATUS", dest="statuses",
-                   help="every row whose status starts with this; repeatable")
-    p.add_argument("--stage", metavar="NAME", help="one stage only")
-    p.add_argument("--all", action="store_true", dest="all_rows",
-                   help="every active row, and stop the chain")
-    p.add_argument("--stop", action="store_true",
-                   help="stop the chain only; let running jobs finish")
-
-    p = sub.add_parser("doctor", parents=[common],
-                       help="reconcile against the scheduler")
-    p.add_argument("--repair", action="store_true",
-                   help="reset orphaned rows and restore the chain width")
-    p.add_argument("--all", action="store_true", dest="all_runs",
-                   help="check every run")
-    p.add_argument("--check-fs", action="store_true",
-                   help="verify the filesystem supports the claim protocol")
-
-    p = sub.add_parser("logs", parents=[common], help="the run log")
-    p.add_argument("--follow", action="store_true", help="tail as it grows")
-    p.add_argument("--level", metavar="LEVEL", help="only entries at this level")
-    p.add_argument("--stage", metavar="NAME", help="only entries about this stage")
-    p.add_argument("--lines", type=int, default=40, metavar="N",
-                   help="how many entries to show")
-
-    p = sub.add_parser("export", parents=[common],
-                       help="parameters and state as one delimited file")
-    p.add_argument("-o", "--output", metavar="PATH", help="write here")
-    p.add_argument("--status", action="append", metavar="STATUS", dest="statuses",
-                   help="only rows whose status starts with this")
-
-    return parser
-
-
-_EPILOG = """\
-commands:
-  run CONFIG        prepare and submit; state-aware, so repeating it does
-                    whatever remains
-  status            how the run is going
-  show --row R      everything about one row
-  rerun --row R     run rows or stages again, with --set to change values
-  cancel            stop jobs, and with --stop take no new work
-  doctor            reconcile against the scheduler, --repair to fix
-  logs              jobchain's record of the run
-  export            parameters and state as one file
-
-exit codes:
-""" + "\n".join(f"  {code:<3} {name}" for code, name in sorted(EXIT_NAMES.items()))
-
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
-
-
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    """Parse arguments, dispatch, and translate failures into exit codes."""
-    parser = build_parser()
-    args = parser.parse_args(argv)
-
-    if not args.command:
-        parser.print_help()
-        return EXIT_USAGE
-
-    configure_logging(verbosity=getattr(args, "verbose", 0))
-
-    handler = _HANDLERS.get(args.command)
-    if handler is None:  # pragma: no cover - argparse rejects unknown commands
-        parser.error(f"unknown command {args.command}")
-        return EXIT_USAGE
-
-    try:
-        return handler(args)
-    except JobChainError as exc:
-        get_logger().error("%s", exc)
-        return exc.exit_code
-    except KeyboardInterrupt:
-        get_logger().error("interrupted")
-        return EXIT_USAGE
-    except BrokenPipeError:  # pragma: no cover - depends on the consumer
-        return EXIT_OK
-    except Exception as exc:
-        # Reaching here means an unexpected condition escaped the layers
-        # below, which is a defect in this tool rather than bad input.
-        get_logger().error(
-            "internal error: %s. This is a defect in %s %s, not a problem with "
-            "the input; the traceback below belongs in a bug report.",
-            exc, PROGRAM, VERSION)
-        import traceback
-        traceback.print_exc()
-        return EXIT_INTERNAL
-
-
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
-
-
-def _emit(lines: Sequence[str]) -> None:
-    for line in lines:
-        print(line)
-
-
-def _emit_json(payload: Any) -> None:
-    print(json.dumps(payload, indent=2, sort_keys=True, default=str))
-
-
-def _select_store(args: argparse.Namespace) -> Store:
-    """Choose which run to act on.
-
-    With one run it is used automatically. With several and no selection, the
-    runs are listed and the command stops rather than guessing.
-    """
-    root = Store.discover_root()
-    if root is None:
-        raise StateError("no .jobchain directory found here or in any parent")
-
-    selector = args.run_selector or os.environ.get("JOBCHAIN_RUN")
-    names = Store.list_runs(root)
-    if not names:
-        raise StateError(f"no runs exist under {root}")
-    if selector:
-        if selector not in names:
-            raise StateError(
-                f"no run named '{selector}' under {root}; runs are "
-                + ", ".join(names))
-        return Store(os.path.join(root, selector))
-    if len(names) == 1:
-        return Store(os.path.join(root, names[0]))
-
-    _emit([f"{len(names)} runs exist; specify one with --run", ""])
-    _emit(report.render_run_list(root, [_run_summary(root, n) for n in names]))
-    raise UsageError("several runs exist and none was selected")
-
-
-def _run_summary(root: str, name: str) -> Dict[str, Any]:
-    """One line of facts about a run, for the selection listing."""
-    store = Store(os.path.join(root, name))
-    try:
-        rows = store.load_rows()
-        config = store.load_config()
-    except JobChainError:
-        return {"name": name, "rows": 0, "done": 0, "failed": 0, "active": 0,
-                "started": "-"}
-    counts = report.summarize(rows)
-    return {
-        "name": name,
-        "rows": len(rows),
-        "done": counts.get(DONE, 0),
-        "failed": counts.get("failed", 0) + counts.get("cancelled", 0),
-        "active": sum(1 for r in rows if r.status in ACTIVE or r.status == "RUNNING"),
-        "started": str(config.get("created_at", "-"))[:16],
-    }
-
-
-def _open(args: argparse.Namespace) -> operations.PreparedRun:
-    """Load a run from its captured configuration.
-
-    Completion is checked here rather than in one command, so whichever
-    command a person happens to run is the one that notices the run has
-    finished. The check is cheap and idempotent: it writes the marker only on
-    the transition into completion, and removes it as soon as anything is
-    outstanding again.
-    """
-    store = _select_store(args)
-    prepared = operations.open_run(store)
-    if getattr(args, "dry_run", False):
-        from .scheduler import NullScheduler
-        prepared.scheduler = NullScheduler(prepared.config.scheduler)
-    _attach_file_log(prepared, args)
-    if not getattr(args, "dry_run", False):
-        operations.check_completion(store, prepared.config.on_complete)
-    return prepared
-
-
-def _attach_file_log(prepared: operations.PreparedRun,
-                     args: argparse.Namespace) -> None:
-    """Send full detail to the run's log file as well as the console."""
-    configure_logging(
-        verbosity=getattr(args, "verbose", 0),
-        log_file=prepared.store.log_path,
-        terminal_level=getattr(args, "log_level", None)
-        or prepared.config.terminal_level,
-        file_level=getattr(args, "file_log_level", None)
-        or prepared.config.file_level,
-    )
-
-
-def _resolve_rows(prepared: operations.PreparedRun, args: argparse.Namespace,
-                  default_all_active: bool = False) -> List[Any]:
-    """Resolve a row selection from identifiers or statuses."""
-    store = prepared.store
-    unique = prepared.schema.unique_fields
-    field_names = getattr(prepared.schema, "field_names", None)
-    selectors = getattr(args, "rows", None) or []
-    statuses = getattr(args, "statuses", None) or []
-
-    if selectors:
-        return [store.resolve_row(s, unique, field_names) for s in selectors]
-    rows = store.load_rows()
-    if statuses:
-        wanted = [s.lower() for s in statuses]
-        return [r for r in rows
-                if any(r.status.lower().startswith(w) for w in wanted)]
-    if getattr(args, "all_rows", False):
-        return [r for r in rows if r.current is not None and not r.is_terminal]
-    if default_all_active:
-        return [r for r in rows if r.current is not None and not r.is_terminal]
-    raise UsageError("select rows with --row or --status")
-
-
-def _confirm(prompt: str, expected: str, skip: bool) -> bool:
-    """Ask for a typed confirmation, unless it was waived."""
-    if skip:
-        return True
-    if not sys.stdin.isatty():
-        _emit([prompt, "not a terminal, and --yes was not given; nothing done"])
-        return False
-    _emit([prompt])
-    try:
-        return input(f"Type '{expected}' to confirm: ").strip() == expected
-    except EOFError:
-        return False
-
-
-class Progress:
-    """A progress bar for script generation.
-
-    A bar rather than a line per script: several hundred "wrote script"
-    messages is noise. Individual paths still reach the log file at debug
-    level, so the detail is available without flooding the console.
-    """
-
-    def __init__(self, enabled: bool = True, width: int = 40):
-        self.enabled = enabled and sys.stderr.isatty()
-        self.width = width
-        self.total = 0
-        self.done = 0
-        self.started = 0.0
-
-    def start(self, total: int) -> None:
-        self.total = total
-        self.done = 0
-        self.started = time.time()
-        self._paint()
-
-    def advance(self, count: int = 1) -> None:
-        self.done += count
-        self._paint()
-
-    def finish(self) -> None:
-        if self.enabled:
-            self._paint()
-            sys.stderr.write("\n")
-            sys.stderr.flush()
-
-    def _paint(self) -> None:
-        if not self.enabled or not self.total:
-            return
-        filled = int(self.width * self.done / self.total)
-        bar = "#" * filled + "." * (self.width - filled)
-        elapsed = time.time() - self.started
-        sys.stderr.write(f"\r      [{bar}] {self.done}/{self.total}  {elapsed:.1f}s")
-        sys.stderr.flush()
-
-
-# ---------------------------------------------------------------------------
-# Commands
-# ---------------------------------------------------------------------------
+from ..parse import format_report
+from ..store import Store
+from .support import (
+    PROGRAM,
+    WATCH_INTERVAL_SECONDS,
+    Progress,
+    _confirm,
+    _emit,
+    _emit_json,
+    _open,
+    _resolve_rows,
+    _run_summary,
+)
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -496,7 +103,7 @@ def _render_header(config: RunConfig, store: Store) -> List[str]:
     ]
 
 
-def _report_run(result: operations.RunResult, args: argparse.Namespace) -> int:
+def _report_run(result: "operations.RunResult", args: argparse.Namespace) -> int:
     """Render the outcome of a run command."""
     report_lines: List[str] = []
     if result.scan_report is not None:
@@ -580,7 +187,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _status_body(prepared: operations.PreparedRun, rows: Sequence[Any],
+def _status_body(prepared: "operations.PreparedRun", rows: Sequence[Any],
                  views: Sequence[Any], counts: Dict[str, int],
                  metrics: Any, args: argparse.Namespace) -> List[str]:
     store = prepared.store
@@ -601,7 +208,7 @@ def _status_body(prepared: operations.PreparedRun, rows: Sequence[Any],
     return lines
 
 
-def _watch(prepared: operations.PreparedRun, args: argparse.Namespace) -> int:
+def _watch(prepared: "operations.PreparedRun", args: argparse.Namespace) -> int:
     """Repaint the status view until the run finishes or is interrupted."""
     store = prepared.store
     try:
@@ -738,7 +345,7 @@ def cmd_show(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _show_output(prepared: operations.PreparedRun, row: Any,
+def _show_output(prepared: "operations.PreparedRun", row: Any,
                  stage: Optional[str]) -> int:
     """Print the scheduler's own log for a stage."""
     store = prepared.store
@@ -906,7 +513,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return EXIT_OK if result.ok or args.repair else 6
 
 
-def _doctor_payload(result: operations.DoctorResult) -> Dict[str, Any]:
+def _doctor_payload(result: "operations.DoctorResult") -> Dict[str, Any]:
     return {
         "run": result.run,
         "live_chains": result.live_chains,
@@ -919,7 +526,7 @@ def _doctor_payload(result: operations.DoctorResult) -> Dict[str, Any]:
     }
 
 
-def _render_doctor(result: operations.DoctorResult) -> List[str]:
+def _render_doctor(result: "operations.DoctorResult") -> List[str]:
     lines = [f"run '{result.run}'", ""]
     shortfall = result.target_width - result.live_chains
     lines.append(f"chains       {result.live_chains} live, configured width "
@@ -1044,7 +651,3 @@ _HANDLERS = {
     "logs": cmd_logs,
     "export": cmd_export,
 }
-
-
-if __name__ == "__main__":  # pragma: no cover
-    sys.exit(main())

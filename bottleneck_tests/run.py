@@ -21,6 +21,7 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from jobchain.report import build_views, compute_metrics
+from jobchain.scheduler import Scheduler
 from jobchain.store import Store
 
 
@@ -55,6 +56,7 @@ def _make_home(root: str, rows: int, blocked: int = 0, stages: int = 1) -> str:
     with open(os.path.join(home, "rows.idx"), "w", encoding="utf-8") as f:
         f.write("".join(f"{name}\n" for name in names))
     Store(home).create({"name": "bottleneck"})
+    Scheduler("pbs").write_facts(home)
     return home
 
 

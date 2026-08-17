@@ -22,8 +22,8 @@ from dataclasses import dataclass
 from dataclasses import field as dc_field
 from typing import Any, ClassVar, Dict, List, Mapping, Optional, Sequence
 
-from .core import PipelineError, get_logger, trace
-from .schema import _import_module
+from .core import PipelineError, get_logger, reject_unknown_keys, trace
+from .schema import import_module_from_path
 
 #: Dependency types a stage may declare against the stage before it.
 DEPENDS_TYPES = ("afterok", "afterany", "afternotok")
@@ -307,7 +307,7 @@ class Pipeline:
         """Build one instance of each stage's class."""
         module = None
         if self.stage_module:
-            module = _import_module(self.stage_module,
+            module = import_module_from_path(self.stage_module,
                                     self.source_path or os.getcwd())
         self.stages = [_build_stage(spec, module, self.stage_module, run_context)
                        for spec in self.specs]
@@ -348,12 +348,7 @@ def load_pipeline_source(source: Any, base_dir: str) -> Pipeline:
 def _build_pipeline(document: Dict[str, Any], path: str) -> Pipeline:
     """Turn a parsed pipeline document into a Pipeline."""
     allowed = {"name", "version", "description", "stage_module", "defaults", "stages"}
-    unknown = set(document) - allowed
-    if unknown:
-        raise PipelineError(
-            f"unknown key(s) {sorted(unknown)} in pipeline; recognized keys are "
-            f"{sorted(allowed)}"
-        )
+    reject_unknown_keys(document, allowed, "pipeline", PipelineError)
 
     entries = document.get("stages") or []
     if not entries:

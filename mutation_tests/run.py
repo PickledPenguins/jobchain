@@ -33,43 +33,43 @@ class Mutation:
 
 MUTATIONS = (
     Mutation(
-        "store-done-boundary", "jobchain/store.py",
+        "store-done-boundary", "jobchain/store/model.py",
         "if all(status == DONE for status in statuses):",
         "if all(status != DONE for status in statuses):",
         "tests.test_store_unit",
     ),
     Mutation(
-        "store-cancelled-vs-failed", "jobchain/store.py",
+        "store-cancelled-vs-failed", "jobchain/store/model.py",
         "if stage.status == CANCELLED:",
         "if stage.status == FAILED:",
         "tests.test_store_unit",
     ),
     Mutation(
-        "store-running-membership", "jobchain/store.py",
+        "store-running-membership", "jobchain/store/model.py",
         "if RUNNING in statuses:",
         "if RUNNING not in statuses:",
         "tests.test_store_unit",
     ),
     Mutation(
-        "store-queued-claimed-combination", "jobchain/store.py",
+        "store-queued-claimed-combination", "jobchain/store/model.py",
         "if QUEUED in statuses or CLAIMED in statuses:",
         "if QUEUED in statuses and CLAIMED in statuses:",
         "tests.test_store_unit",
     ),
     Mutation(
-        "store-terminal-done", "jobchain/store.py",
+        "store-terminal-done", "jobchain/store/model.py",
         'return (status == DONE or status.startswith("failed.")',
         'return (status != DONE or status.startswith("failed.")',
         "tests.test_store_unit",
     ),
     Mutation(
-        "operations-force-guard", "jobchain/operations.py",
+        "operations-force-guard", "jobchain/operations/lifecycle.py",
         "if store.exists() and force:",
         "if store.exists() and not force:",
         "tests.test_operations_unit",
     ),
     Mutation(
-        "operations-submit-condition", "jobchain/operations.py",
+        "operations-submit-condition", "jobchain/operations/lifecycle.py",
         "if not claimed or submit_only or regenerate or resume:",
         "if claimed and submit_only or regenerate or resume:",
         "tests.test_operations_unit",
