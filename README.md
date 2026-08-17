@@ -178,6 +178,12 @@ export JOBCHAIN_NODE=/shared/apps/jobchain/bin/jobchain-node.sh
 
 See [Architecture](#architecture) for what that costs.
 
+**With network access and pip**, `pip install .` (or `pip install -e .` for
+development) works too, using `pyproject.toml`, and installs a `jobchain`
+console script alongside the Python package. It does not build
+`bin/jobchain-node`; the C helper still needs `install.sh` or `make`, and
+either needs to end up on `PATH` or be pointed to with `JOBCHAIN_NODE`.
+
 ## Project structure
 
 ```
@@ -189,6 +195,7 @@ jobchain-0.6/
 ├── install.sh                  offline installer and environment check
 ├── run_tests.sh                test runner with coverage and static analysis
 ├── ruff.toml                   lint configuration
+├── pyproject.toml              packaging metadata, for `pip install`
 │
 ├── bin/
 │   ├── jobchain                launcher; resolves paths and calls Python

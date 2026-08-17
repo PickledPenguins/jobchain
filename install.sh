@@ -109,14 +109,18 @@ rm -rf "$PROBE"
 if [ -n "$PREFIX" ]; then
     say "installing to $PREFIX"
     mkdir -p "$PREFIX" || { fail "cannot create $PREFIX"; exit 1; }
-    for item in jobchain src examples tests bin Makefile \
-                README.md DESIGN.md CHANGELOG.md run_tests.sh install.sh \
-                ruff.toml; do
+    # Only what the submit host and compute nodes actually need at run time:
+    # the Python package, the launcher and helpers, examples (the "next
+    # steps" message below points at them), and docs. src/ (already compiled
+    # into bin/jobchain-node), tests/, Makefile, run_tests.sh, ruff.toml, and
+    # DESIGN.md are development-time artifacts that don't belong on every
+    # shared-storage install this might be copied to.
+    for item in jobchain examples bin README.md CHANGELOG.md \
+                install.sh pyproject.toml; do
         [ -e "$ROOT/$item" ] && cp -R "$ROOT/$item" "$PREFIX/"
     done
     chmod +x "$PREFIX/bin/jobchain" "$PREFIX/bin/jobchain-node" \
-             "$PREFIX/bin/jobchain-node.sh" "$PREFIX/run_tests.sh" \
-             "$PREFIX/install.sh" 2>/dev/null
+             "$PREFIX/bin/jobchain-node.sh" "$PREFIX/install.sh" 2>/dev/null
     say ""
     say "Add the launcher to PATH:"
     say "  export PATH=\"$PREFIX/bin:\$PATH\""

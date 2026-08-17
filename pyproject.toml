@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jobchain"
+description = "Run scheduler (PBS/Slurm) job pipelines from a delimited parameter file"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "PyYAML>=5.1",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+dev = ["ruff", "mypy", "types-PyYAML"]
+
+[project.scripts]
+# A convenience for pip-based installs. bin/jobchain -- the offline,
+# HPC-oriented launcher documented in README.md's Installation section --
+# remains the primary supported path and is unaffected by this; the two
+# coexist.
+jobchain = "jobchain.cli:main"
+
+[tool.setuptools.dynamic]
+# Read from the one place VERSION actually lives, rather than hardcoding a
+# second copy here: duplicated version identifiers across files is exactly
+# what the 0.6 release collapsed (see CHANGELOG.md).
+version = {attr = "jobchain.core.VERSION"}
+
+[tool.setuptools.packages.find]
+include = ["jobchain*"]
