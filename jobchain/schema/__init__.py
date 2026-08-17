@@ -92,26 +92,36 @@ from .validators import (
     resolve_path,
 )
 
-#: The complete pre-split public surface of jobchain.schema, private helpers
-#: included: tests reach jobchain.schema.<name> directly (both as attribute
-#: calls and as mock.patch targets against os/importlib) rather than through
-#: a submodule. Listed explicitly so every name's re-export is intentional,
-#: not an artifact ruff's "unused import" check would otherwise flag.
+#: This package's actual public API: what a caller of jobchain.schema
+#: wants. Everything reachable as jobchain.schema.X before the split still
+#: is (see _INTERNAL_REEXPORTS below), but this -- not the raw attribute
+#: list -- is what dir()-respecting tools (pydoc, Sphinx, help()) and
+#: `from jobchain.schema import *` should show.
 __all__ = [
-    "ABC", "AllOf", "Any", "AnyOf", "Bool", "Callable", "CheckResult",
-    "ClassVar", "Comparison", "Dict", "Exact", "FIELD_VALIDATORS",
-    "FILE_VALIDATORS", "Field", "FileValidator", "Float", "Int", "Iterable",
-    "List", "OneOf", "Optional", "Optional_", "OutputPath", "PathExists",
+    "AllOf", "AnyOf", "Bool", "CheckResult", "Comparison", "Exact",
+    "FIELD_VALIDATORS", "FILE_VALIDATORS", "Field", "FileValidator",
+    "Float", "Int", "OneOf", "Optional_", "OutputPath", "PathExists",
     "PredicateFile", "PredicateRow", "ROW_VALIDATORS", "Regex",
     "RequiredWhen", "RowCount", "RowValidator", "Schema", "SchemaBase",
-    "SchemaError", "Sequence", "Str", "Tuple", "Unique", "Validator",
-    "_DELIMITER_ALIASES", "_FALSE_WORDS", "_FLOAT_RE", "_INT_RE",
-    "_TRUE_WORDS", "_anchor", "_as_check_list", "_as_optional_str",
-    "_build_field", "_build_field_check", "_build_file_check",
-    "_build_row_check", "_build_schema", "_load_python_object",
-    "_load_python_row_validator", "_load_python_schema",
-    "_load_python_validator", "_load_schema_class", "_load_yaml_schema",
-    "_resolve_delimiter", "abstractmethod", "apply_base_dir", "dataclass",
-    "dc_field", "importlib", "import_module_from_path", "load_schema",
-    "load_schema_source", "os", "re", "reject_unknown_keys", "resolve_path",
+    "SchemaError", "Str", "Unique", "Validator", "apply_base_dir",
+    "import_module_from_path", "load_schema", "load_schema_source",
+    "reject_unknown_keys", "resolve_path",
 ]
+
+#: Re-exported only so existing mock.patch targets and dir()-based tooling
+#: keep working (e.g. patch("jobchain.schema.os.path.isdir", ...),
+#: patch("jobchain.schema.importlib.util.spec_from_file_location", ...)
+#: called directly rather than through a submodule); these are
+#: typing/stdlib re-exports and private implementation helpers, not part
+#: of this package's declared API, so they're deliberately left out of
+#: __all__ above.
+_INTERNAL_REEXPORTS = (
+    ABC, Any, Callable, ClassVar, Dict, Iterable, List, Optional, Sequence,
+    Tuple, abstractmethod, dataclass, dc_field, importlib, os, re,
+    _DELIMITER_ALIASES, _FALSE_WORDS, _FLOAT_RE, _INT_RE, _TRUE_WORDS,
+    _anchor, _as_check_list, _as_optional_str, _build_field,
+    _build_field_check, _build_file_check, _build_row_check, _build_schema,
+    _load_python_object, _load_python_row_validator, _load_python_schema,
+    _load_python_validator, _load_schema_class, _load_yaml_schema,
+    _resolve_delimiter,
+)

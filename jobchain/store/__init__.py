@@ -86,21 +86,31 @@ from .model import (
 from .node import find_node_binary
 from .node_client import NodeHelperClient
 
-#: The complete pre-split public surface of jobchain.store, private helpers
-#: included: tests reach jobchain.store.<name> directly (both as attribute
-#: calls and as mock.patch targets against os/shutil) rather than through a
-#: submodule. Listed explicitly so every name's re-export is intentional,
-#: not an artifact ruff's "unused import" check would otherwise flag.
+#: This package's actual public API: what a caller of jobchain.store wants.
+#: Everything reachable as jobchain.store.X before the split still is (see
+#: _INTERNAL_REEXPORTS below), but this -- not the raw attribute list -- is
+#: what dir()-respecting tools (pydoc, Sphinx, help()) and `from
+#: jobchain.store import *` should show.
 __all__ = [
-    "ACTIVE", "Any", "CANCELLED", "CLAIMED", "DEFAULT_ROOT", "DONE", "Dict",
-    "Enum", "FAILED", "INVALID", "List", "ManifestEntry", "NODE_BINARY_NAME",
-    "NodeHelperClient", "NodeHelperError", "Optional", "PENDING", "QUEUED",
-    "RUNNING", "RowState", "RowStatus",
-    "RunState", "Sequence", "StageState", "StateError", "Store", "TERMINAL",
-    "Tuple", "VERSION", "_code_of", "_column_value", "_hostname", "_pad",
-    "_parse_assignments", "_parse_handoff", "_read_json", "_read_lines",
-    "_read_optional", "_read_text", "_write_json", "_write_text",
-    "annotations", "dataclass", "dc_field", "find_node_binary", "get_logger",
-    "json", "os", "render_env", "row_name", "shell_quote", "shutil",
-    "subprocess", "time", "trace",
+    "ACTIVE", "CANCELLED", "CLAIMED", "DEFAULT_ROOT", "DONE", "FAILED",
+    "INVALID", "ManifestEntry", "NODE_BINARY_NAME", "NodeHelperClient",
+    "NodeHelperError", "PENDING", "QUEUED", "RUNNING", "RowState",
+    "RowStatus", "RunState", "StageState", "StateError", "Store",
+    "TERMINAL", "VERSION", "find_node_binary", "render_env", "row_name",
+    "shell_quote",
 ]
+
+#: Re-exported only so existing mock.patch targets and dir()-based tooling
+#: keep working (e.g. patch("jobchain.store.os.replace", ...),
+#: patch("jobchain.store.find_node_binary", ...) called directly rather than
+#: through a submodule); these are typing/stdlib re-exports and private
+#: implementation helpers, not part of this package's declared API, so
+#: they're deliberately left out of __all__ above.
+_INTERNAL_REEXPORTS = (
+    Any, Dict, Enum, List, Optional, Sequence, Tuple, annotations,
+    dataclass, dc_field, json, os, shutil, subprocess, time,
+    get_logger, trace,
+    _code_of, _column_value, _hostname, _pad, _parse_assignments,
+    _parse_handoff, _read_json, _read_lines, _read_optional, _read_text,
+    _write_json, _write_text,
+)

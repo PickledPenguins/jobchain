@@ -88,26 +88,37 @@ from .support import (
     _select_store,
 )
 
-#: The complete pre-split public surface of jobchain.cli, private helpers
-#: included: tests reach jobchain.cli.<name> directly (both as attribute
-#: calls and as mock.patch targets) rather than through a submodule. Listed
-#: explicitly so every name's re-export is intentional, not an artifact
-#: ruff's "unused import" check would otherwise flag.
+#: This package's actual public API: what a caller of jobchain.cli wants.
+#: Everything reachable as jobchain.cli.X before the split still is (see
+#: _INTERNAL_REEXPORTS below), but this -- not the raw attribute list -- is
+#: what dir()-respecting tools (pydoc, Sphinx, help()) and `from
+#: jobchain.cli import *` should show.
 __all__ = [
-    "ACTIVE", "Any", "ConflictError", "DONE", "Dict", "EXIT_INTERNAL",
-    "EXIT_NAMES", "EXIT_OK", "EXIT_USAGE", "JobChainError", "List",
-    "Optional", "PROGRAM", "Progress", "RunConfig", "Sequence", "StateError",
-    "Store", "UsageError", "VERSION", "WATCH_INTERVAL_SECONDS", "_EPILOG",
-    "_HANDLERS", "_attach_file_log", "_check_filesystem", "_confirm",
-    "_confirm_discard", "_doctor_payload", "_emit", "_emit_json", "_follow",
-    "_open", "_prune_runs", "_render_completed_warning", "_render_doctor",
-    "_render_header", "_report_run", "_resolve_rows", "_run_summary",
-    "_select_store", "_show_output", "_status_all", "_status_body", "_watch",
-    "annotations", "argparse", "build_parser", "cmd_cancel", "cmd_doctor",
-    "cmd_export", "cmd_logs", "cmd_rerun", "cmd_run", "cmd_show",
-    "cmd_status", "configure_logging", "format_report", "get_logger", "json",
-    "load_config", "main", "operations", "os", "report", "sys", "time",
+    "ConflictError", "EXIT_INTERNAL", "EXIT_NAMES", "EXIT_OK", "EXIT_USAGE",
+    "JobChainError", "PROGRAM", "Progress", "RunConfig", "StateError",
+    "Store", "UsageError", "VERSION", "WATCH_INTERVAL_SECONDS",
+    "build_parser", "cmd_cancel", "cmd_doctor", "cmd_export", "cmd_logs",
+    "cmd_rerun", "cmd_run", "cmd_show", "cmd_status", "configure_logging",
+    "format_report", "load_config", "main",
 ]
+
+#: Re-exported only so existing mock.patch targets (both string paths and
+#: attribute access, e.g. patch.object(cli.os.path, "isfile", ...),
+#: patch.object(cli.sys.stdin, "isatty", ...)) and dir()-based tooling keep
+#: working; these are typing/stdlib re-exports, other jobchain packages
+#: pulled in for internal use, and private implementation helpers -- not
+#: part of this package's declared API, so they're deliberately left out
+#: of __all__ above.
+_INTERNAL_REEXPORTS = (
+    ACTIVE, Any, DONE, Dict, List, Optional, Sequence,
+    _EPILOG, _HANDLERS, _attach_file_log, _check_filesystem, _confirm,
+    _confirm_discard, _doctor_payload, _emit, _emit_json, _follow, _open,
+    _prune_runs, _render_completed_warning, _render_doctor, _render_header,
+    _report_run, _resolve_rows, _run_summary, _select_store, _show_output,
+    _status_all, _status_body, _watch,
+    annotations, argparse, get_logger, json, operations, os, report, sys,
+    time,
+)
 
 
 if __name__ == "__main__":  # pragma: no cover

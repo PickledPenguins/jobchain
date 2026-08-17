@@ -106,31 +106,41 @@ from .rerun import (
 )
 from .submit import _record_submissions, _submit_chains, _submit_row
 
-#: The complete pre-split public surface of jobchain.operations, private
-#: helpers included: several tests, and mock.patch targets in particular,
-#: reach jobchain.operations.<name> directly rather than through a
-#: submodule. Listing everything here (rather than relying on ruff's
-#: "unused import" heuristic, which cannot see cross-module patch targets)
-#: documents that every name is re-exported on purpose.
+#: This package's actual public API: what a caller of jobchain.operations
+#: wants. Everything reachable as jobchain.operations.X before the split
+#: still is (see _INTERNAL_REEXPORTS below), but this -- not the raw
+#: attribute list -- is what dir()-respecting tools (pydoc, Sphinx, help())
+#: and `from jobchain.operations import *` should show.
 __all__ = [
-    "ACTIVE", "ALIVE", "Any", "CANCELLED", "CancelResult", "ConflictError", "DONE",
-    "DataError", "Dict", "DoctorResult", "FAILED", "FINISHED", "Finding", "List",
-    "NullScheduler", "Optional", "PENDING", "Pipeline", "PreparedRun", "QUEUED",
-    "RUNNING", "RerunPlan", "RerunResult", "RowContext", "RowResult", "RowState",
-    "RunConfig", "RunContext", "RunResult", "ScanReport", "Scheduler",
-    "SchedulerBackend", "Schema", "Sequence", "StateError", "Store", "TERMINAL",
-    "ThreadPoolExecutor", "Tuple", "UsageError", "_apply_changes",
-    "_check_inputs_unchanged", "_check_params_digest", "_context_for",
-    "_continue_existing", "_create_row_state", "_describe_changes", "_digest",
-    "_directory_size", "_existing_output", "_generate_scripts", "_identifier_for",
-    "_pipeline_document", "_prepare_fresh", "_raw_fields", "_read_completions",
-    "_record_submissions", "_regenerate_row", "_run_hook", "_schema_document",
-    "_submit_chains", "_submit_row", "_submit_selected", "_validate_only",
-    "_write_json_file", "apply_base_dir", "as_completed", "cancel", "check_completion",
-    "dataclass", "dc_field", "describe_environment", "doctor", "execute_rerun",
-    "expand_template", "get_logger", "json", "load_pipeline_source",
-    "load_schema_source", "log_startup_summary", "normalize_file", "open_run", "os",
-    "plan_rerun", "prepare", "render_final_config", "row_name", "run", "scan",
-    "scan_row", "single_job_pipeline", "subprocess", "template_is_generation_aware",
-    "time", "trace", "verify_script",
+    "ACTIVE", "ALIVE", "CANCELLED", "CancelResult", "ConflictError", "DONE",
+    "DataError", "DoctorResult", "FAILED", "FINISHED", "Finding",
+    "NullScheduler", "PENDING", "Pipeline", "PreparedRun", "QUEUED",
+    "RUNNING", "RerunPlan", "RerunResult", "RowContext", "RowResult",
+    "RowState", "RunConfig", "RunContext", "RunResult", "ScanReport",
+    "Scheduler", "SchedulerBackend", "Schema", "StateError", "Store",
+    "TERMINAL", "UsageError", "apply_base_dir", "cancel", "check_completion",
+    "describe_environment", "doctor", "execute_rerun", "expand_template",
+    "load_pipeline_source", "load_schema_source", "log_startup_summary",
+    "normalize_file", "open_run", "plan_rerun", "prepare",
+    "render_final_config", "row_name", "run", "scan", "scan_row",
+    "single_job_pipeline", "template_is_generation_aware", "verify_script",
 ]
+
+#: Re-exported only so existing mock.patch targets and dir()-based tooling
+#: keep working (e.g. patch("jobchain.operations.subprocess.run", ...)
+#: called directly rather than through a submodule); these are
+#: typing/stdlib re-exports and private implementation helpers, not part
+#: of this package's declared API, so they're deliberately left out of
+#: __all__ above.
+_INTERNAL_REEXPORTS = (
+    Any, Dict, List, Optional, Sequence, ThreadPoolExecutor, Tuple,
+    as_completed, dataclass, dc_field, json, os, subprocess, time,
+    get_logger, trace,
+    _apply_changes, _check_inputs_unchanged, _check_params_digest,
+    _context_for, _continue_existing, _create_row_state, _describe_changes,
+    _digest, _directory_size, _existing_output, _generate_scripts,
+    _identifier_for, _pipeline_document, _prepare_fresh, _raw_fields,
+    _read_completions, _record_submissions, _regenerate_row, _run_hook,
+    _schema_document, _submit_chains, _submit_row, _submit_selected,
+    _validate_only, _write_json_file,
+)
