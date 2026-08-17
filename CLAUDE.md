@@ -82,21 +82,25 @@ Dependencies run one way, downward — a lower module never imports a higher one
 core → schema → parse → config → pipeline → store → scheduler → operations → report → cli
 ```
 
-`cli.py` is the only module that parses arguments, prints for a human, or turns an exception into
+`cli/` is the only package that parses arguments, prints for a human, or turns an exception into
 an exit code.
 
 | Module | Role |
 |---|---|
 | `core.py` | exit codes, exceptions, logging |
-| `schema.py` | validators, the Field/Schema model, YAML and Python loaders |
+| `schema/` | validators, the Field/Schema model, YAML and Python loaders |
 | `parse.py` | normalization, then the three-tier scan |
 | `config.py` | run config: merge, capture, templates |
 | `pipeline.py` | stages, class resolution, the `JobStage` interface |
-| `store.py` | row state, generations, claims |
+| `store/` | row state, generations, claims |
 | `scheduler.py` | submit, query, cancel, script generation |
-| `operations.py` | run, rerun, cancel, doctor, completion |
+| `operations/` | run, rerun, cancel, doctor, completion |
 | `report.py` | status, show, metrics, export |
-| `cli.py` | argument parsing and exit-code mapping |
+| `cli/` | argument parsing and exit-code mapping |
+
+`schema/`, `store/`, `operations/`, and `cli/` are subpackages (each was a single file above this
+size before a maintainability refactor split them along their own documented internal boundaries);
+every name reachable at the flat-file path before that split is still reachable the same way today.
 
 ### The JobStage interface
 

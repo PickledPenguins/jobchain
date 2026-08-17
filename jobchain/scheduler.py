@@ -16,7 +16,7 @@ their active queues and an absent job is never one that is still running.
 Scheduler-specific behavior (submit-command syntax, directive prefixes, job-
 state queries, cancellation) lives entirely on ``SchedulerBackend``
 subclasses -- one per scheduler kind -- following the same
-abstract-base-plus-registry shape ``schema.py``'s validators already use.
+abstract-base-plus-registry shape ``schema.validators``'s validators already use.
 Everything else (subprocess execution, dependency threading across a
 pipeline, dry-run behavior) is scheduler-agnostic and stays on the base
 class or as free functions.
@@ -47,7 +47,7 @@ class JobState(str, Enum):
     specifically to reconcile the two by hand when they disagree -- which
     they legitimately can, e.g. a job that died before writing any status.
 
-    See RowStatus in store.py for why __str__/__format__ are overridden.
+    See RowStatus in store/model.py for why __str__/__format__ are overridden.
     """
 
     ALIVE = "ALIVE"        # queued, held, or running
@@ -61,7 +61,7 @@ class JobState(str, Enum):
         return format(str(self.value), spec)
 
 
-# Back-compat module attributes; see RowStatus in store.py for why a str
+# Back-compat module attributes; see RowStatus in store/model.py for why a str
 # mixin makes this a no-op change everywhere else.
 ALIVE = JobState.ALIVE
 FINISHED = JobState.FINISHED

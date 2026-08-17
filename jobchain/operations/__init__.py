@@ -14,12 +14,12 @@ either the old generation with the old parameters or the new generation with
 the new ones.
 
 This package is organized by the lifecycle stage each piece belongs to:
-``prepare`` (loading and the run/prepare pipeline), ``submit`` (talking to
-the scheduler), ``rerun`` (correcting and resubmitting), ``cancel``,
-``doctor`` (reconciliation), and ``completion``. Everything that was
-reachable as ``jobchain.operations.X`` before the split still is: this
-module re-exports the full previous surface, so callers, tests, and any
-external code never see the internal package boundary.
+``lifecycle`` (loading and the run/prepare pipeline), ``submit`` (talking to
+the scheduler), ``rerun`` (correcting and resubmitting), ``cancellation``,
+``reconcile`` (doctor), and ``completion``. Everything that was reachable as
+``jobchain.operations.X`` before the split still is: this module re-exports
+the full previous surface, so callers, tests, and any external code never
+see the internal package boundary.
 """
 
 from __future__ import annotations

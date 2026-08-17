@@ -200,25 +200,44 @@ jobchain-0.6/
 ├── bin/
 │   ├── jobchain                launcher; resolves paths and calls Python
 │   ├── jobchain-node           compiled helper (built by install.sh)
-│   └── jobchain-node.sh        shell helper, same protocol            363
+│   └── jobchain-node.sh        shell helper, same protocol            402
 │
 ├── jobchain/                   submit-host tool, Python
 │   ├── __init__.py             public re-exports, including the stage API 102
-│   ├── __main__.py             entry point for "python3 -m jobchain"      9
-│   ├── core.py                 exit codes, exceptions, logging          251
-│   ├── schema.py               validators, the Field/Schema model,
-│   │                           and its YAML and Python loaders        1,210
+│   ├── __main__.py             entry point for "python3 -m jobchain"      8
+│   ├── core.py                 exit codes, exceptions, logging          280
+│   ├── schema/                 validators, the Field/Schema model, and its
+│   │                           YAML and Python loaders
+│   │   ├── validators.py         Field/Row/File validator hierarchies  644
+│   │   ├── model.py              Field, Schema, SchemaBase             180
+│   │   ├── loaders.py            YAML and inline-mapping loading       275
+│   │   └── dynamic.py            loading schemas/validators from Python 137
 │   ├── parse.py                normalization, then the three-tier scan   524
-│   ├── config.py               run config: merge, capture, templates     380
-│   ├── pipeline.py             stages, class resolution, JobStage        543
-│   ├── store.py                row state, generations, claims            860
-│   ├── scheduler.py            submit, query, cancel, script generation  519
-│   ├── operations.py           run, rerun, cancel, doctor, completion  1,244
-│   ├── report.py               status, show, metrics, export             643
-│   └── cli.py                  argument parsing and exit-code mapping    998
+│   ├── config.py               run config: merge, capture, templates     378
+│   ├── pipeline.py             stages, class resolution, JobStage        553
+│   ├── store/                  row state, generations, claims
+│   │   ├── core.py               the Store class                       507
+│   │   ├── model.py              RowStatus, RowState, RunState, StageState 208
+│   │   ├── io.py                 atomic file primitives, shell rendering 146
+│   │   ├── node_client.py        claim/mark/event/selftest via the helper 96
+│   │   └── node.py               locating the compute-node binary        41
+│   ├── scheduler.py            submit, query, cancel, script generation  784
+│   ├── operations/             run, rerun, cancel, doctor, completion
+│   │   ├── lifecycle.py          prepare, validate, generate, run       485
+│   │   ├── rerun.py              correcting and resubmitting            325
+│   │   ├── reconcile.py          doctor: reconciling against the scheduler 174
+│   │   ├── submit.py             talking to the scheduler               118
+│   │   ├── completion.py         the on-complete hook                    93
+│   │   └── cancellation.py       stopping jobs                           71
+│   ├── report.py               status, show, metrics, export             652
+│   └── cli/                    argument parsing and exit-code mapping
+│       ├── commands.py           the cmd_* functions                    653
+│       ├── support.py            shared helpers: output, selection      185
+│       ├── parser.py             the argument grammar                   169
+│       └── entry.py              dispatch, exception to exit code        67
 │
 ├── src/
-│   └── jobchain-node.c         compute-node helper, C99, one file      1,043
+│   └── jobchain-node.c         compute-node helper, C99, one file      1,130
 │
 ├── examples/
 │   ├── pipeline/                a three-stage pipeline, ready to run
